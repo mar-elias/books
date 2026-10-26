@@ -1,0 +1,12 @@
+implement an app for linux desktop to organize pdf and epub books
+
+I want to be able to add a new book to the database: Has title, author, year, categories, tags, front cover and a link to a local file. If the front cover isn't given, it should be extracted from the first page of the pdf/epub.
+
+The books should be displayed in a grid, just like Apple Books.
+
+On the left side is a side panel that has options: Library section containing "All books" and "Authors". And a "Lists" section, where I can create new lists and drag and drop books from the library.
+
+Double clicking a book should open the book using Okular (or a different app).
+
+A small icon to the bottom right of a book cover should show if it's a pdf or an epub.
+
