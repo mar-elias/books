@@ -1,0 +1,23 @@
+[package]
+name = "ebook_reader"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.92"
+description = "A Linux bookshelf for local PDF and EPUB files"
+license = "MIT"
+
+[[bin]]
+name = "ebook-reader"
+path = "src/main.rs"
+
+[dependencies]
+cairo-rs = { version = "0.22", features = ["png"] }
+gtk4 = { version = "0.11", features = ["v4_14"] }
+image = { version = "0.25", default-features = false, features = ["jpeg", "png", "gif"] }
+libadwaita = { version = "0.9", features = ["v1_5"] }
+pango = "0.22"
+pangocairo = "0.22"
+poppler-rs = "0.26"
+roxmltree = "0.20"
+rusqlite = { version = "0.32", features = ["bundled"] }
+zip = "2"
