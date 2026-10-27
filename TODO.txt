@@ -10,3 +10,5 @@ Double clicking a book should open the book using Okular (or a different app).
 
 A small icon to the bottom right of a book cover should show if it's a pdf or an epub.
 
+Use Tauri + HTML/CSS
+
