@@ -5,6 +5,8 @@ Choose a database folder and a cover thumbnail folder. Book files stay where the
 
 The window is a Tauri shell. The shelf itself is HTML. The code is rust.
 
+![Mar-Elias Books](screenshots/mar-elias-books.png)
+
 ## Build
 Install WebKitGTK 4.1, GTK 3, Poppler, and Cairo, then run the app:
 
