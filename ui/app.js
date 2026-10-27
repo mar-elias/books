@@ -23,6 +23,7 @@ const BOOK_COLORS = new Set([
   "#fce94f",
 ]);
 const ZOOM_WIDTHS = [112, 136, 160, 192, 232, 280, 336];
+const ZOOM_DEFAULT = 2;
 const ZOOM_KEY = "books-zoom";
 let zoomLevel = storedZoom();
 
@@ -57,21 +58,26 @@ function query() {
 function storedZoom() {
   try {
     const raw = localStorage.getItem(ZOOM_KEY);
-    if (raw == null) return 2;
+    if (raw == null) return ZOOM_DEFAULT;
     const stored = Number(raw);
     if (Number.isInteger(stored) && stored >= 0 && stored < ZOOM_WIDTHS.length) return stored;
   } catch (_error) {
     /* keep the default size when storage is unavailable */
   }
-  return 2;
+  return ZOOM_DEFAULT;
 }
 
 function applyZoom() {
   document.documentElement.style.setProperty("--book-width", `${ZOOM_WIDTHS[zoomLevel]}px`);
   const zoomOut = document.querySelector("#zoom-out");
   const zoomIn = document.querySelector("#zoom-in");
+  const zoomValue = document.querySelector("#zoom-level");
   if (zoomOut) zoomOut.disabled = zoomLevel === 0;
   if (zoomIn) zoomIn.disabled = zoomLevel === ZOOM_WIDTHS.length - 1;
+  if (zoomValue) {
+    const scale = Math.round((ZOOM_WIDTHS[zoomLevel] / ZOOM_WIDTHS[ZOOM_DEFAULT]) * 100);
+    zoomValue.textContent = `${scale}%`;
+  }
 }
 
 function setZoom(next) {
@@ -334,7 +340,10 @@ function renderBooks() {
 
 function bookMatches(book, needle) {
   if (!needle) return true;
-  return book.title.toLowerCase().includes(needle) || book.authorLabel.toLowerCase().includes(needle);
+  const notes = book.notes || "";
+  return book.title.toLowerCase().includes(needle)
+    || book.authorLabel.toLowerCase().includes(needle)
+    || notes.toLowerCase().includes(needle);
 }
 
 function selectBook(id) {
@@ -437,7 +446,9 @@ function emptyState(filtering) {
   const detail = document.createElement("p");
   if (filtering) {
     title.textContent = "No matches";
-    detail.textContent = "Try a different title or author.";
+    detail.textContent = viewState.kind === "authors"
+      ? "Try a different title or author."
+      : "Try a different title, author, or note.";
   } else {
     title.textContent = "No books";
     detail.textContent = "Add a PDF or EPUB to start your library.";
@@ -790,7 +801,7 @@ function bind() {
       setZoom(zoomLevel - 1);
     } else if (event.key === "0") {
       event.preventDefault();
-      setZoom(2);
+      setZoom(ZOOM_DEFAULT);
     }
   });
   content.addEventListener("click", (event) => {

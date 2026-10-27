@@ -35,6 +35,13 @@
           <div class="header-actions">
             <div class="zoom" role="group" aria-label="Zoom">
               <button id="zoom-out" class="text" type="button" aria-label="Zoom out">−</button>
+              <span class="zoom-mark" aria-hidden="true">
+                <svg viewBox="0 0 16 16" width="14" height="14">
+                  <circle cx="6.75" cy="6.75" r="4.25" fill="none" stroke="currentColor" stroke-width="1.5" />
+                  <path d="M10 10.1 13.2 13.3" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" />
+                </svg>
+              </span>
+              <span id="zoom-level" class="zoom-level" aria-live="polite">100%</span>
               <button id="zoom-in" class="text" type="button" aria-label="Zoom in">+</button>
             </div>
             <input id="search" type="search" placeholder="Search" aria-label="Search" />
@@ -86,7 +93,7 @@
             <div class="picker-menu" hidden></div>
           </div>
           <div class="detail-row">
-            <label>Notes <textarea id="field-notes" rows="4" dir="auto"></textarea></label>
+            <label>Notes <textarea id="field-notes" rows="7" dir="auto"></textarea></label>
             <img id="cover-preview" alt="" hidden />
           </div>
         </div>

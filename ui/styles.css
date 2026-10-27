@@ -218,7 +218,31 @@ input[type="search"] { width: 220px; }
   line-height: 1;
 }
 
-.zoom button + button { border-left: 1px solid var(--line); }
+.zoom > :not(:first-child) { border-left: 1px solid var(--line); }
+
+.zoom > .zoom-level { border-left: 0; }
+
+.zoom-mark {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 0px;
+  width: auto;
+  padding: 0 2px 0 8px;
+  color: var(--muted);
+}
+
+.zoom-mark svg { display: block; }
+
+.zoom-level {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  min-width: 40px;
+  padding: 0 6px 0 2px;
+  font-size: 15px;
+  font-variant-numeric: tabular-nums;
+}
 
 .zoom button:disabled {
   color: var(--muted);
@@ -442,7 +466,8 @@ dialog input[type="text"], dialog textarea { width: 100%; box-sizing: border-box
 }
 
 @container (max-width: 620px) {
-  .book-fields { grid-template-columns: 1fr; }
+  .book-fields,
+  .detail-row { grid-template-columns: 1fr; }
 }
 
 .color-field {
@@ -557,6 +582,9 @@ dialog input[type="text"], dialog textarea { width: 100%; box-sizing: border-box
 }
 
 #book-delete {
-  width: 100%;
+  /* width: 100%; */
   margin-top: 8px;
+  background: #aa2e24;
+  border-color: var(--danger);
+  color: var(--accent-ink);
 }
