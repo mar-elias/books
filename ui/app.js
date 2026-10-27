@@ -11,6 +11,7 @@ let toastTimer = 0;
 let editingId = null;
 let editingTitle = "";
 let editingListIds = [];
+let selectedBookId = null;
 
 const ZOOM_WIDTHS = [112, 136, 160, 192, 232, 280, 336];
 const ZOOM_KEY = "books-zoom";
@@ -321,9 +322,29 @@ function bookMatches(book, needle) {
   return book.title.toLowerCase().includes(needle) || book.authorLabel.toLowerCase().includes(needle);
 }
 
+function selectBook(id) {
+  selectedBookId = id;
+  for (const card of content.querySelectorAll(".book")) {
+    const selected = Number(card.dataset.id) === id;
+    card.classList.toggle("selected", selected);
+    card.setAttribute("aria-selected", selected ? "true" : "false");
+  }
+}
+
+function clearBookSelection() {
+  selectedBookId = null;
+  for (const card of content.querySelectorAll(".book.selected")) {
+    card.classList.remove("selected");
+    card.setAttribute("aria-selected", "false");
+  }
+}
+
 function bookTile(book) {
   const article = document.createElement("article");
   article.className = "book";
+  article.dataset.id = String(book.id);
+  article.setAttribute("aria-selected", book.id === selectedBookId ? "true" : "false");
+  if (book.id === selectedBookId) article.classList.add("selected");
   article.title = `${book.title}\n${book.authorLabel}`;
   const frame = document.createElement("div");
   frame.className = "cover";
@@ -340,9 +361,11 @@ function bookTile(book) {
   title.textContent = book.title;
   frame.append(image, badge);
   article.append(frame, title);
+  article.addEventListener("click", () => selectBook(book.id));
   article.addEventListener("dblclick", () => openBook(book.id));
   article.addEventListener("contextmenu", (event) => {
     event.preventDefault();
+    selectBook(book.id);
     const items = [
       { label: "Open", onSelect: () => openBook(book.id) },
       { label: "Edit", onSelect: () => editBook(book) },
@@ -738,6 +761,9 @@ function bind() {
     event.preventDefault();
     setZoom(zoomLevel + (event.deltaY < 0 ? 1 : -1));
   }, { passive: false });
+  content.addEventListener("click", (event) => {
+    if (!event.target.closest(".book")) clearBookSelection();
+  });
   content.addEventListener("scroll", hideMenu);
 }
 

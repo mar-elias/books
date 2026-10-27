@@ -232,6 +232,12 @@ input[type="search"] { width: 220px; }
   width: var(--book-width);
   min-width: 0;
   margin: 0;
+  cursor: pointer;
+}
+
+.book.selected {
+  background: #dfd6c8;
+  box-shadow: 0 0 0 8px #dfd6c8;
 }
 
 .cover {
