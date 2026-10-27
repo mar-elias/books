@@ -13,6 +13,15 @@ let editingTitle = "";
 let editingListIds = [];
 let selectedBookId = null;
 
+const BOOK_COLORS = new Set([
+  "#f9c650",
+  "#ff8a00",
+  "#fa517e",
+  "#71c15d",
+  "#5ea7ef",
+  "#c17ad5",
+  "#fce94f",
+]);
 const ZOOM_WIDTHS = [112, 136, 160, 192, 232, 280, 336];
 const ZOOM_KEY = "books-zoom";
 let zoomLevel = storedZoom();
@@ -358,7 +367,10 @@ function bookTile(book) {
   const title = document.createElement("p");
   title.className = "book-title";
   title.dir = "auto";
-  title.textContent = book.title;
+  const label = document.createElement("span");
+  label.textContent = book.title;
+  if (BOOK_COLORS.has(book.color)) label.style.backgroundColor = book.color;
+  title.append(label);
   frame.append(image, badge);
   article.append(frame, title);
   article.addEventListener("click", () => selectBook(book.id));
@@ -481,6 +493,7 @@ function openBookDialog(book) {
   document.querySelector("#field-title").value = book ? book.title : "";
   document.querySelector("#field-author").value = book ? book.author : "";
   document.querySelector("#field-year").value = book && book.year != null ? String(book.year) : "";
+  selectColor(book && book.color ? book.color : "");
   renderPicker(
     document.querySelector("#category-picker"),
     categories.map((item) => ({ value: item.name, label: item.name })),
@@ -523,6 +536,7 @@ async function saveBook(event) {
     coverPath: document.querySelector("#field-cover").value,
     categories: chosenValues(document.querySelector("#category-picker")).join(", "),
     tags: chosenValues(document.querySelector("#tag-picker")).join(", "),
+    color: chosenColor(),
   };
   const listIds = chosenValues(document.querySelector("#list-picker")).map(Number);
   try {
@@ -573,6 +587,18 @@ function pickerSummary(menu) {
 
 function chosenValues(picker) {
   return [...picker.querySelectorAll(".picker-menu input:checked")].map((input) => input.value);
+}
+
+function selectColor(color) {
+  const chosen = BOOK_COLORS.has(color) ? color : "";
+  for (const swatch of document.querySelectorAll("#book-colors .swatch")) {
+    swatch.setAttribute("aria-pressed", swatch.dataset.color === chosen ? "true" : "false");
+  }
+}
+
+function chosenColor() {
+  const swatch = document.querySelector("#book-colors .swatch[aria-pressed='true']");
+  return swatch ? swatch.dataset.color : "";
 }
 
 function closePickers(except) {
@@ -702,6 +728,9 @@ function bind() {
     addCatalogName("New tag", "Add", "create_tag");
   });
   document.querySelector("#add-book").addEventListener("click", () => openBookDialog(null));
+  for (const swatch of document.querySelectorAll("#book-colors .swatch")) {
+    swatch.addEventListener("click", () => selectColor(swatch.dataset.color));
+  }
   for (const picker of document.querySelectorAll(".picker")) {
     const button = picker.querySelector(".picker-button");
     const menu = picker.querySelector(".picker-menu");

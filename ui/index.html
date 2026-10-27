@@ -9,7 +9,7 @@
   <body>
     <div id="app">
       <aside>
-        <p class="app-name">Books</p>
+        <p class="app-name">Mar-Elias Books</p>
         <p class="section">Library</p>
         <nav id="library-nav" aria-label="Library"></nav>
         <div class="section-row">
@@ -56,6 +56,19 @@
         <label>Title <input id="field-title" type="text" /></label>
         <label>Author <input id="field-author" type="text" /></label>
         <label>Year <input id="field-year" type="text" inputmode="numeric" /></label>
+        <div class="color-field" id="book-colors">
+          <span>Color</span>
+          <div class="swatches" role="radiogroup" aria-label="Color">
+            <button type="button" class="swatch none" data-color="" aria-label="No color" aria-pressed="true"></button>
+            <button type="button" class="swatch" data-color="#f9c650" aria-label="#f9c650"></button>
+            <button type="button" class="swatch" data-color="#ff8a00" aria-label="#ff8a00"></button>
+            <button type="button" class="swatch" data-color="#fa517e" aria-label="#fa517e"></button>
+            <button type="button" class="swatch" data-color="#71c15d" aria-label="#71c15d"></button>
+            <button type="button" class="swatch" data-color="#5ea7ef" aria-label="#5ea7ef"></button>
+            <button type="button" class="swatch" data-color="#c17ad5" aria-label="#c17ad5"></button>
+            <button type="button" class="swatch" data-color="#fce94f" aria-label="#fce94f"></button>
+          </div>
+        </div>
         <div class="picker" id="category-picker" data-empty="Add one with + in the sidebar.">
           <span>Categories</span>
           <button type="button" class="picker-button"><span>None</span></button>

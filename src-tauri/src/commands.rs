@@ -33,6 +33,7 @@ pub struct BookForm {
     pub cover_path: String,
     pub categories: String,
     pub tags: String,
+    pub color: String,
 }
 
 #[derive(Debug, Serialize)]
@@ -108,6 +109,7 @@ pub fn form_to_draft(form: BookForm, keep_cover: Option<Vec<u8>>) -> Result<Draf
         }
     };
     let author = form.author.trim().to_string();
+    let color = parse_color(&form.color)?;
     let cover = cover_bytes(&form.cover_path, &file_path, &title, &author, keep_cover)?;
     Ok(Draft {
         title,
@@ -118,7 +120,36 @@ pub fn form_to_draft(form: BookForm, keep_cover: Option<Vec<u8>>) -> Result<Draf
         categories: db::split_names(&form.categories),
         tags: db::split_names(&form.tags),
         cover_png: cover,
+        color,
     })
+}
+
+const BOOK_COLORS: &[&str] = &[
+    "#f9c650",
+    "#ff8a00",
+    "#fa517e",
+    "#71c15d",
+    "#5ea7ef",
+    "#c17ad5",
+    "#fce94f",
+];
+
+fn parse_color(value: &str) -> Result<String, String> {
+    let text = value.trim().trim_start_matches('#').to_ascii_lowercase();
+    if text.is_empty() {
+        return Ok(String::new());
+    }
+    let rgb = if text.len() == 8 && text.starts_with("ff") {
+        &text[2..]
+    } else {
+        text.as_str()
+    };
+    let color = format!("#{rgb}");
+    if BOOK_COLORS.contains(&color.as_str()) {
+        Ok(color)
+    } else {
+        Err("Choose one of the book colors.".to_string())
+    }
 }
 
 fn cover_bytes(
@@ -437,6 +468,7 @@ mod tests {
             cover_path: cover.to_string(),
             categories: " Fiction, fiction ,History".to_string(),
             tags: "unread".to_string(),
+            color: String::new(),
         }
     }
 
@@ -520,6 +552,22 @@ mod tests {
         let untitled = form_to_draft(form("  ", "", "  ", "  "), None).unwrap();
         assert_eq!(untitled.title, "Untitled");
         assert_eq!(untitled.file_path, "");
+    }
+
+    #[test]
+    fn book_color_must_be_one_of_the_palette() {
+        let mut item = form("Notes", "", "", "");
+        item.color = "ff5ea7ef".to_string();
+        assert_eq!(form_to_draft(item, None).unwrap().color, "#5ea7ef");
+        let mut yellow = form("Notes", "", "", "");
+        yellow.color = "#FCE94F".to_string();
+        assert_eq!(form_to_draft(yellow, None).unwrap().color, "#fce94f");
+        let mut unknown = form("Notes", "", "", "");
+        unknown.color = "#000000".to_string();
+        assert_eq!(
+            form_to_draft(unknown, None).unwrap_err(),
+            "Choose one of the book colors."
+        );
     }
 
     #[test]
