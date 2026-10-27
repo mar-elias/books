@@ -7,6 +7,8 @@ The window is a Tauri shell. The shelf itself is HTML. The code is rust/JavaScri
 
 ![Mar-Elias Books](screenshots/mar-elias-books.png)
 
+![Mar-Elias Books](screenshots/mar-elias-books2.png)
+
 ## Build
 Install WebKitGTK 4.1, GTK 3, Poppler, and Cairo, then run the app:
 
