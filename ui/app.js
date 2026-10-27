@@ -94,11 +94,15 @@ function toast(message) {
 }
 
 function hideMenu() {
+  if (menu.hidden) return;
   menu.hidden = true;
   menu.replaceChildren();
+  content.removeEventListener("scroll", hideMenu);
+  document.querySelector("aside").removeEventListener("scroll", hideMenu);
 }
 
 function showMenu(x, y, items) {
+  hideMenu();
   menu.replaceChildren();
   for (const item of items) {
     if (item.children) {
@@ -115,6 +119,8 @@ function showMenu(x, y, items) {
   const top = Math.min(y, window.innerHeight - rect.height - 8);
   menu.style.left = `${Math.max(8, left)}px`;
   menu.style.top = `${Math.max(8, top)}px`;
+  content.addEventListener("scroll", hideMenu, { passive: true });
+  document.querySelector("aside").addEventListener("scroll", hideMenu, { passive: true });
 }
 
 function menuButton(item) {
@@ -493,6 +499,7 @@ function openBookDialog(book) {
   document.querySelector("#field-title").value = book ? book.title : "";
   document.querySelector("#field-author").value = book ? book.author : "";
   document.querySelector("#field-year").value = book && book.year != null ? String(book.year) : "";
+  document.querySelector("#field-notes").value = book && book.notes ? book.notes : "";
   selectColor(book && book.color ? book.color : "");
   renderPicker(
     document.querySelector("#category-picker"),
@@ -537,6 +544,7 @@ async function saveBook(event) {
     categories: chosenValues(document.querySelector("#category-picker")).join(", "),
     tags: chosenValues(document.querySelector("#tag-picker")).join(", "),
     color: chosenColor(),
+    notes: document.querySelector("#field-notes").value,
   };
   const listIds = chosenValues(document.querySelector("#list-picker")).map(Number);
   try {
@@ -785,15 +793,9 @@ function bind() {
       setZoom(2);
     }
   });
-  content.addEventListener("wheel", (event) => {
-    if (!event.ctrlKey && !event.metaKey) return;
-    event.preventDefault();
-    setZoom(zoomLevel + (event.deltaY < 0 ? 1 : -1));
-  }, { passive: false });
   content.addEventListener("click", (event) => {
     if (!event.target.closest(".book")) clearBookSelection();
   });
-  content.addEventListener("scroll", hideMenu);
 }
 
 bind();

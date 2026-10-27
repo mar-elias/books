@@ -10,7 +10,7 @@
     <div id="app">
       <aside>
         <p class="app-name">Mar-Elias Books</p>
-        <p class="section">Library</p>
+        <p class="section"><b>Library</b></p>
         <nav id="library-nav" aria-label="Library"></nav>
         <div class="section-row">
           <p class="section">Categories</p>
@@ -51,8 +51,8 @@
     <dialog id="book-dialog">
       <form id="book-form">
         <h2 id="book-dialog-title">Add book</h2>
-        <label>Book <input id="field-file" type="text" spellcheck="false" /></label>
-        <label>Cover <input id="field-cover" type="text" spellcheck="false" /></label>
+        <label>Book path <input id="field-file" type="text" spellcheck="false" /></label>
+        <label>Cover path <input id="field-cover" type="text" spellcheck="false" /></label>
         <label>Title <input id="field-title" type="text" /></label>
         <label>Author <input id="field-author" type="text" /></label>
         <label>Year <input id="field-year" type="text" inputmode="numeric" /></label>
@@ -84,6 +84,7 @@
           <button type="button" class="picker-button"><span>None</span></button>
           <div class="picker-menu" hidden></div>
         </div>
+        <label>Notes <textarea id="field-notes" rows="5"></textarea></label>
         <img id="cover-preview" alt="" hidden />
         <p id="book-status"></p>
         <div class="dialog-actions">

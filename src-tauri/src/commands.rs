@@ -34,6 +34,7 @@ pub struct BookForm {
     pub categories: String,
     pub tags: String,
     pub color: String,
+    pub notes: String,
 }
 
 #[derive(Debug, Serialize)]
@@ -110,6 +111,7 @@ pub fn form_to_draft(form: BookForm, keep_cover: Option<Vec<u8>>) -> Result<Draf
     };
     let author = form.author.trim().to_string();
     let color = parse_color(&form.color)?;
+    let notes = form.notes.trim().to_string();
     let cover = cover_bytes(&form.cover_path, &file_path, &title, &author, keep_cover)?;
     Ok(Draft {
         title,
@@ -121,6 +123,7 @@ pub fn form_to_draft(form: BookForm, keep_cover: Option<Vec<u8>>) -> Result<Draf
         tags: db::split_names(&form.tags),
         cover_png: cover,
         color,
+        notes,
     })
 }
 
@@ -469,6 +472,7 @@ mod tests {
             categories: " Fiction, fiction ,History".to_string(),
             tags: "unread".to_string(),
             color: String::new(),
+            notes: String::new(),
         }
     }
 
@@ -552,6 +556,13 @@ mod tests {
         let untitled = form_to_draft(form("  ", "", "  ", "  "), None).unwrap();
         assert_eq!(untitled.title, "Untitled");
         assert_eq!(untitled.file_path, "");
+    }
+
+    #[test]
+    fn notes_keep_line_breaks_and_drop_outer_space() {
+        let mut item = form("Notes", "", "", "");
+        item.notes = "  keep this\nline  ".to_string();
+        assert_eq!(form_to_draft(item, None).unwrap().notes, "keep this\nline");
     }
 
     #[test]

@@ -18,6 +18,7 @@ pub struct Book {
     pub tags: Vec<String>,
     pub list_ids: Vec<i64>,
     pub color: String,
+    pub notes: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -32,6 +33,7 @@ pub struct Draft {
     pub tags: Vec<String>,
     pub cover_png: Vec<u8>,
     pub color: String,
+    pub notes: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -130,15 +132,16 @@ impl Library {
     pub fn add_book(&self, draft: &Draft) -> Result<Book, DbError> {
         let tx = self.conn.unchecked_transaction()?;
         let insert = tx.execute(
-            "INSERT INTO books (title, author, year, file_path, format, color)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+            "INSERT INTO books (title, author, year, file_path, format, color, notes)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
             params![
                 draft.title,
                 draft.author,
                 draft.year,
                 none_if_empty(&draft.file_path),
                 none_if_empty(&draft.format),
-                none_if_empty(&draft.color)
+                none_if_empty(&draft.color),
+                none_if_empty(&draft.notes)
             ],
         );
         if let Err(err) = insert {
@@ -160,8 +163,8 @@ impl Library {
         let tx = self.conn.unchecked_transaction()?;
         let updated = tx.execute(
             "UPDATE books
-             SET title = ?1, author = ?2, year = ?3, file_path = ?4, format = ?5, color = ?6
-             WHERE id = ?7",
+             SET title = ?1, author = ?2, year = ?3, file_path = ?4, format = ?5, color = ?6, notes = ?7
+             WHERE id = ?8",
             params![
                 draft.title,
                 draft.author,
@@ -169,6 +172,7 @@ impl Library {
                 none_if_empty(&draft.file_path),
                 none_if_empty(&draft.format),
                 none_if_empty(&draft.color),
+                none_if_empty(&draft.notes),
                 id
             ],
         );
@@ -209,7 +213,7 @@ impl Library {
 
     pub fn book(&self, id: i64) -> Result<Option<Book>, DbError> {
         let mut stmt = self.conn.prepare(
-            "SELECT id, title, author, year, file_path, format, cover_path, color
+            "SELECT id, title, author, year, file_path, format, cover_path, color, notes
              FROM books WHERE id = ?1",
         )?;
         let row = stmt
@@ -229,7 +233,7 @@ impl Library {
         let rows = match scope {
             BookScope::All => {
                 stmt = self.conn.prepare(
-                    "SELECT id, title, author, year, file_path, format, cover_path, color
+                    "SELECT id, title, author, year, file_path, format, cover_path, color, notes
                      FROM books
                      ORDER BY title COLLATE NOCASE, id",
                 )?;
@@ -237,7 +241,7 @@ impl Library {
             }
             BookScope::Author(author) => {
                 stmt = self.conn.prepare(
-                    "SELECT id, title, author, year, file_path, format, cover_path, color
+                    "SELECT id, title, author, year, file_path, format, cover_path, color, notes
                      FROM books
                      WHERE author = ?1
                      ORDER BY title COLLATE NOCASE, id",
@@ -247,7 +251,7 @@ impl Library {
             }
             BookScope::Category(name) => {
                 stmt = self.conn.prepare(
-                    "SELECT b.id, b.title, b.author, b.year, b.file_path, b.format, b.cover_path, b.color
+                    "SELECT b.id, b.title, b.author, b.year, b.file_path, b.format, b.cover_path, b.color, b.notes
                      FROM books b
                      JOIN book_categories bc ON bc.book_id = b.id
                      JOIN categories c ON c.id = bc.category_id
@@ -259,7 +263,7 @@ impl Library {
             }
             BookScope::Tag(name) => {
                 stmt = self.conn.prepare(
-                    "SELECT b.id, b.title, b.author, b.year, b.file_path, b.format, b.cover_path, b.color
+                    "SELECT b.id, b.title, b.author, b.year, b.file_path, b.format, b.cover_path, b.color, b.notes
                      FROM books b
                      JOIN book_tags bt ON bt.book_id = b.id
                      JOIN tags t ON t.id = bt.tag_id
@@ -271,7 +275,7 @@ impl Library {
             }
             BookScope::List(list_id) => {
                 stmt = self.conn.prepare(
-                    "SELECT b.id, b.title, b.author, b.year, b.file_path, b.format, b.cover_path, b.color
+                    "SELECT b.id, b.title, b.author, b.year, b.file_path, b.format, b.cover_path, b.color, b.notes
                      FROM books b
                      JOIN list_books lb ON lb.book_id = b.id
                      WHERE lb.list_id = ?1
@@ -451,7 +455,8 @@ impl Library {
                  file_path TEXT UNIQUE,
                  format TEXT CHECK (format IS NULL OR format IN ('pdf', 'epub')),
                  cover_path TEXT,
-                 color TEXT
+                 color TEXT,
+                 notes TEXT
              );
              CREATE TABLE IF NOT EXISTS categories (
                  id INTEGER PRIMARY KEY,
@@ -487,6 +492,19 @@ impl Library {
         )?;
         self.allow_books_without_files()?;
         self.add_book_color()?;
+        self.add_book_notes()?;
+        Ok(())
+    }
+
+    fn add_book_notes(&self) -> Result<(), DbError> {
+        let mut stmt = self.conn.prepare("PRAGMA table_info(books)")?;
+        let columns = stmt
+            .query_map([], |row| row.get::<_, String>(1))?
+            .collect::<Result<Vec<_>, _>>()?;
+        if columns.iter().any(|name| name == "notes") {
+            return Ok(());
+        }
+        self.conn.execute("ALTER TABLE books ADD COLUMN notes TEXT", [])?;
         Ok(())
     }
 
@@ -682,6 +700,7 @@ fn map_book_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<Book> {
         tags: Vec::new(),
         list_ids: Vec::new(),
         color: row.get::<_, Option<String>>(7)?.unwrap_or_default(),
+        notes: row.get::<_, Option<String>>(8)?.unwrap_or_default(),
     })
 }
 
@@ -754,6 +773,7 @@ mod tests {
             tags: vec!["reread".to_string()],
             cover_png: b"\x89PNG\r\n\x1a\nfake".to_vec(),
             color: String::new(),
+            notes: String::new(),
         }
     }
 
@@ -878,6 +898,66 @@ mod tests {
         library.add_book(&pathless("More")).unwrap();
         assert_eq!(library.books(&BookScope::All).unwrap().len(), 3);
         assert_eq!(library.books(&BookScope::All).unwrap()[0].color, "");
+        assert_eq!(library.books(&BookScope::All).unwrap()[0].notes, "");
+        let _ = fs::remove_dir_all(dir);
+    }
+
+    #[test]
+    fn book_notes_are_saved_and_cleared() {
+        let (library, dir) = temp_library();
+        let mut item = draft("Dune", "Frank Herbert", "/books/dune.epub");
+        item.notes = "Read the appendix.".to_string();
+        let book = library.add_book(&item).unwrap();
+        assert_eq!(book.notes, "Read the appendix.");
+        assert_eq!(
+            library.books(&BookScope::All).unwrap()[0].notes,
+            "Read the appendix."
+        );
+        item.notes.clear();
+        let updated = library.update_book(book.id, &item).unwrap();
+        assert_eq!(updated.notes, "");
+        let _ = fs::remove_dir_all(dir);
+    }
+
+    #[test]
+    fn catalogs_without_notes_gain_the_column() {
+        let dir = std::env::temp_dir().join(format!(
+            "ebook-reader-notes-{}-{}",
+            std::process::id(),
+            unique_suffix()
+        ));
+        let _ = fs::remove_dir_all(&dir);
+        fs::create_dir_all(&dir).unwrap();
+        let db_path = dir.join("library.db");
+        {
+            let conn = Connection::open(&db_path).unwrap();
+            conn.execute_batch(
+                "CREATE TABLE books (
+                     id INTEGER PRIMARY KEY,
+                     title TEXT NOT NULL,
+                     author TEXT NOT NULL DEFAULT '',
+                     year INTEGER,
+                     file_path TEXT UNIQUE,
+                     format TEXT CHECK (format IS NULL OR format IN ('pdf', 'epub')),
+                     cover_path TEXT,
+                     color TEXT
+                 );
+                 INSERT INTO books (title, author, color)
+                 VALUES ('Dune', 'Frank Herbert', '#fa517e');",
+            )
+            .unwrap();
+        }
+        let library = Library::open(&db_path, &dir.join("covers")).unwrap();
+        let books = library.books(&BookScope::All).unwrap();
+        assert_eq!(books[0].title, "Dune");
+        assert_eq!(books[0].color, "#fa517e");
+        assert_eq!(books[0].notes, "");
+        let mut item = draft("Dune", "Frank Herbert", "/books/dune.epub");
+        item.color = "#fa517e".to_string();
+        item.notes = "Keep the map.".to_string();
+        let updated = library.update_book(books[0].id, &item).unwrap();
+        assert_eq!(updated.notes, "Keep the map.");
+        assert_eq!(updated.color, "#fa517e");
         let _ = fs::remove_dir_all(dir);
     }
 
@@ -952,6 +1032,7 @@ mod tests {
             tags: Vec::new(),
             list_ids: Vec::new(),
             color: String::new(),
+            notes: String::new(),
         };
         let json = serde_json::to_value(&book).unwrap();
         assert_eq!(json["filePath"], "/books/dune.epub");
