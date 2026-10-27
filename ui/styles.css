@@ -374,7 +374,7 @@ input[type="search"] { width: 220px; }
 
 .book-title span {
   padding: 0 3px;
-  border-radius: 0.25em;
+  border-radius: 0.5em;
   box-decoration-break: clone;
   -webkit-box-decoration-break: clone;
 }
