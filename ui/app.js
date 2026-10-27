@@ -266,31 +266,75 @@ function render() {
 function renderLibrary() {
   libraryNav.replaceChildren();
   libraryNav.append(
-    navButton("All books", viewState.kind === "all", () => {
+    navButton("All books", "library", viewState.kind === "all", () => {
       viewState.kind = "all";
       reload();
     }),
-    navButton("Authors", viewState.kind === "authors" || viewState.kind === "author", () => {
+    navButton("Authors", "author", viewState.kind === "authors" || viewState.kind === "author", () => {
       viewState.kind = "authors";
       reload();
     }),
   );
 }
 
-function navButton(label, active, onClick) {
+function navButton(label, icon, active, onClick) {
   const button = document.createElement("button");
   button.type = "button";
   button.className = active ? "nav active" : "nav";
-  button.textContent = label;
+  const main = document.createElement("span");
+  main.className = "nav-main";
+  const text = document.createElement("span");
+  text.className = "nav-label";
+  text.textContent = label;
+  main.append(navIcon(icon), text);
+  button.append(main);
   button.addEventListener("click", onClick);
   return button;
+}
+
+const NAV_ICON_PATHS = {
+  library: "M1.35 3.15h3.7v10.45H1.35zm4.45-1.35h3.9v11.8H5.8zm4.65 2h3.7v9.8h-3.7z",
+  author: "M8 2.05a2.55 2.55 0 1 1 0 5.1 2.55 2.55 0 0 1 0-5.1zM2.55 14.2c.5-2.9 2.55-4.5 5.45-4.5s4.95 1.6 5.45 4.5c.08.42-.24.85-.68.85H3.23c-.44 0-.76-.43-.68-.85z",
+  list: "M2.15 4.25a1.05 1.05 0 1 0 2.1 0 1.05 1.05 0 1 0-2.1 0M5.5 3.55h8.35v1.4H5.5ZM2.15 8a1.05 1.05 0 1 0 2.1 0 1.05 1.05 0 1 0-2.1 0M5.5 7.3h8.35v1.4H5.5ZM2.15 11.75a1.05 1.05 0 1 0 2.1 0 1.05 1.05 0 1 0-2.1 0M5.5 11.05h8.35v1.4H5.5Z",
+};
+
+function navIcon(kind) {
+  const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+  svg.setAttribute("width", "16");
+  svg.setAttribute("height", "16");
+  svg.setAttribute("aria-hidden", "true");
+  svg.classList.add("nav-icon");
+  const add = (tag, attrs) => {
+    const element = document.createElementNS("http://www.w3.org/2000/svg", tag);
+    for (const [key, value] of Object.entries(attrs)) element.setAttribute(key, value);
+    svg.append(element);
+  };
+  if (kind === "category" || kind === "tag") {
+    svg.setAttribute("viewBox", "0 0 24 24");
+    svg.setAttribute("fill", "none");
+    svg.setAttribute("stroke", "currentColor");
+    svg.setAttribute("stroke-width", "2");
+    svg.setAttribute("stroke-linecap", "round");
+    svg.setAttribute("stroke-linejoin", "round");
+    if (kind === "category") {
+      add("path", { d: "M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z" });
+    } else {
+      add("path", { d: "M12.586 2.586A2 2 0 0 0 11.172 2H4a2 2 0 0 0-2 2v7.172a2 2 0 0 0 .586 1.414l8.704 8.704a2.426 2.426 0 0 0 3.42 0l6.58-6.58a2.426 2.426 0 0 0 0-3.42z" });
+      add("path", { d: "M7.5 7.5h.01" });
+    }
+    return svg;
+  }
+  svg.setAttribute("viewBox", "0 0 16 16");
+  svg.setAttribute("fill", "currentColor");
+  add("path", { d: NAV_ICON_PATHS[kind] });
+  return svg;
 }
 
 function renderNameNav(nav, items, kind) {
   nav.replaceChildren();
   for (const item of items) {
     nav.append(
-      nameButton(item, viewState.kind === kind && viewState.name === item.name, () => {
+      nameButton(item, viewState.kind === kind && viewState.name === item.name, kind, () => {
         viewState.kind = kind;
         viewState.name = item.name;
         reload();
@@ -299,16 +343,20 @@ function renderNameNav(nav, items, kind) {
   }
 }
 
-function nameButton(item, active, onClick) {
+function nameButton(item, active, kind, onClick) {
   const button = document.createElement("button");
   button.type = "button";
   button.className = active ? "nav active" : "nav";
+  const main = document.createElement("span");
+  main.className = "nav-main";
   const name = document.createElement("span");
+  name.className = "nav-label";
   name.textContent = item.name;
+  main.append(navIcon(kind), name);
   const count = document.createElement("span");
   count.className = "count";
   count.textContent = String(item.count);
-  button.append(name, count);
+  button.append(main, count);
   button.addEventListener("click", onClick);
   return button;
 }
@@ -321,7 +369,10 @@ function renderLists() {
     const name = document.createElement("button");
     name.type = "button";
     name.className = "list-name";
-    name.textContent = list.name;
+    const label = document.createElement("span");
+    label.className = "nav-label";
+    label.textContent = list.name;
+    name.append(navIcon("list"), label);
     name.addEventListener("click", () => {
       viewState.kind = "list";
       viewState.id = list.id;
