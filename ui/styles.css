@@ -197,6 +197,8 @@ input[type="search"], input[type="text"], textarea {
 textarea {
   resize: vertical;
   min-height: 96px;
+  unicode-bidi: plaintext;
+  text-align: start;
 }
 
 input[type="search"] { width: 220px; }
@@ -397,6 +399,11 @@ dialog {
   color: var(--ink);
 }
 
+#book-dialog {
+  width: min(760px, calc(100% - 32px));
+  container-type: inline-size;
+}
+
 dialog::backdrop { background: rgba(36, 31, 26, 0.35); }
 
 dialog form { padding: 18px 18px 16px; }
@@ -416,6 +423,27 @@ dialog label {
 }
 
 dialog input[type="text"], dialog textarea { width: 100%; box-sizing: border-box; }
+
+.book-fields {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  column-gap: 16px;
+  align-items: start;
+}
+
+.book-fields > .wide,
+.book-fields > .detail-row { grid-column: 1 / -1; }
+
+.detail-row {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  column-gap: 16px;
+  align-items: start;
+}
+
+@container (max-width: 620px) {
+  .book-fields { grid-template-columns: 1fr; }
+}
 
 .color-field {
   display: flex;
@@ -515,7 +543,7 @@ dialog input[type="text"], dialog textarea { width: 100%; box-sizing: border-box
   display: block;
   width: 120px;
   height: 180px;
-  margin-top: 14px;
+  margin-top: 12px;
   object-fit: contain;
   background: var(--sheet);
   box-shadow: var(--shadow);

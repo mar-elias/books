@@ -51,41 +51,45 @@
     <dialog id="book-dialog">
       <form id="book-form">
         <h2 id="book-dialog-title">Add book</h2>
-        <label>Book path <input id="field-file" type="text" spellcheck="false" /></label>
-        <label>Cover path <input id="field-cover" type="text" spellcheck="false" /></label>
-        <label>Title <input id="field-title" type="text" /></label>
-        <label>Author <input id="field-author" type="text" /></label>
-        <label>Year <input id="field-year" type="text" inputmode="numeric" /></label>
-        <div class="color-field" id="book-colors">
-          <span>Color</span>
-          <div class="swatches" role="radiogroup" aria-label="Color">
-            <button type="button" class="swatch none" data-color="" aria-label="No color" aria-pressed="true"></button>
-            <button type="button" class="swatch" data-color="#f9c650" aria-label="#f9c650"></button>
-            <button type="button" class="swatch" data-color="#ff8a00" aria-label="#ff8a00"></button>
-            <button type="button" class="swatch" data-color="#fa517e" aria-label="#fa517e"></button>
-            <button type="button" class="swatch" data-color="#71c15d" aria-label="#71c15d"></button>
-            <button type="button" class="swatch" data-color="#5ea7ef" aria-label="#5ea7ef"></button>
-            <button type="button" class="swatch" data-color="#c17ad5" aria-label="#c17ad5"></button>
-            <button type="button" class="swatch" data-color="#fce94f" aria-label="#fce94f"></button>
+        <div class="book-fields">
+          <label>Book path <input id="field-file" type="text" spellcheck="false" /></label>
+          <label>Cover path <input id="field-cover" type="text" spellcheck="false" /></label>
+          <label>Title <input id="field-title" type="text" /></label>
+          <label>Author <input id="field-author" type="text" /></label>
+          <label>Year <input id="field-year" type="text" inputmode="numeric" /></label>
+          <div class="color-field" id="book-colors">
+            <span>Color</span>
+            <div class="swatches" role="radiogroup" aria-label="Color">
+              <button type="button" class="swatch none" data-color="" aria-label="No color" aria-pressed="true"></button>
+              <button type="button" class="swatch" data-color="#f9c650" aria-label="#f9c650"></button>
+              <button type="button" class="swatch" data-color="#ff8a00" aria-label="#ff8a00"></button>
+              <button type="button" class="swatch" data-color="#fa517e" aria-label="#fa517e"></button>
+              <button type="button" class="swatch" data-color="#71c15d" aria-label="#71c15d"></button>
+              <button type="button" class="swatch" data-color="#5ea7ef" aria-label="#5ea7ef"></button>
+              <button type="button" class="swatch" data-color="#c17ad5" aria-label="#c17ad5"></button>
+              <button type="button" class="swatch" data-color="#fce94f" aria-label="#fce94f"></button>
+            </div>
+          </div>
+          <div class="picker" id="category-picker" data-empty="Add one with + in the sidebar.">
+            <span>Categories</span>
+            <button type="button" class="picker-button"><span>None</span></button>
+            <div class="picker-menu" hidden></div>
+          </div>
+          <div class="picker" id="tag-picker" data-empty="Add one with + in the sidebar.">
+            <span>Tags</span>
+            <button type="button" class="picker-button"><span>None</span></button>
+            <div class="picker-menu" hidden></div>
+          </div>
+          <div class="picker wide" id="list-picker" data-empty="No lists yet.">
+            <span>Lists</span>
+            <button type="button" class="picker-button"><span>None</span></button>
+            <div class="picker-menu" hidden></div>
+          </div>
+          <div class="detail-row">
+            <label>Notes <textarea id="field-notes" rows="4" dir="auto"></textarea></label>
+            <img id="cover-preview" alt="" hidden />
           </div>
         </div>
-        <div class="picker" id="category-picker" data-empty="Add one with + in the sidebar.">
-          <span>Categories</span>
-          <button type="button" class="picker-button"><span>None</span></button>
-          <div class="picker-menu" hidden></div>
-        </div>
-        <div class="picker" id="tag-picker" data-empty="Add one with + in the sidebar.">
-          <span>Tags</span>
-          <button type="button" class="picker-button"><span>None</span></button>
-          <div class="picker-menu" hidden></div>
-        </div>
-        <div class="picker" id="list-picker" data-empty="No lists yet.">
-          <span>Lists</span>
-          <button type="button" class="picker-button"><span>None</span></button>
-          <div class="picker-menu" hidden></div>
-        </div>
-        <label>Notes <textarea id="field-notes" rows="5"></textarea></label>
-        <img id="cover-preview" alt="" hidden />
         <p id="book-status"></p>
         <div class="dialog-actions">
           <button id="book-cancel" type="button">Cancel</button>
