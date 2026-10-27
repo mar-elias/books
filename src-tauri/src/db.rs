@@ -40,6 +40,13 @@ pub struct AuthorGroup {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
+pub struct NameCount {
+    pub name: String,
+    pub count: i64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct BookList {
     pub id: i64,
     pub name: String,
@@ -49,6 +56,8 @@ pub struct BookList {
 pub enum BookScope {
     All,
     Author(String),
+    Category(String),
+    Tag(String),
     List(i64),
 }
 
@@ -226,6 +235,30 @@ impl Library {
                 stmt.query_map(params![author], map_book_row)?
                     .collect::<Result<Vec<_>, _>>()?
             }
+            BookScope::Category(name) => {
+                stmt = self.conn.prepare(
+                    "SELECT b.id, b.title, b.author, b.year, b.file_path, b.format, b.cover_path
+                     FROM books b
+                     JOIN book_categories bc ON bc.book_id = b.id
+                     JOIN categories c ON c.id = bc.category_id
+                     WHERE c.name = ?1 COLLATE NOCASE
+                     ORDER BY b.title COLLATE NOCASE, b.id",
+                )?;
+                stmt.query_map(params![name], map_book_row)?
+                    .collect::<Result<Vec<_>, _>>()?
+            }
+            BookScope::Tag(name) => {
+                stmt = self.conn.prepare(
+                    "SELECT b.id, b.title, b.author, b.year, b.file_path, b.format, b.cover_path
+                     FROM books b
+                     JOIN book_tags bt ON bt.book_id = b.id
+                     JOIN tags t ON t.id = bt.tag_id
+                     WHERE t.name = ?1 COLLATE NOCASE
+                     ORDER BY b.title COLLATE NOCASE, b.id",
+                )?;
+                stmt.query_map(params![name], map_book_row)?
+                    .collect::<Result<Vec<_>, _>>()?
+            }
             BookScope::List(list_id) => {
                 stmt = self.conn.prepare(
                     "SELECT b.id, b.title, b.author, b.year, b.file_path, b.format, b.cover_path
@@ -262,6 +295,43 @@ impl Library {
             })?
             .collect::<Result<Vec<_>, _>>()?;
         Ok(groups)
+    }
+
+    pub fn categories(&self) -> Result<Vec<NameCount>, DbError> {
+        self.name_counts(NameKind::Category)
+    }
+
+    pub fn tags(&self) -> Result<Vec<NameCount>, DbError> {
+        self.name_counts(NameKind::Tag)
+    }
+
+    fn name_counts(&self, kind: NameKind) -> Result<Vec<NameCount>, DbError> {
+        let sql = match kind {
+            NameKind::Category => {
+                "SELECT c.name, COUNT(*)
+                 FROM categories c
+                 JOIN book_categories bc ON bc.category_id = c.id
+                 GROUP BY c.id
+                 ORDER BY c.name COLLATE NOCASE"
+            }
+            NameKind::Tag => {
+                "SELECT t.name, COUNT(*)
+                 FROM tags t
+                 JOIN book_tags bt ON bt.tag_id = t.id
+                 GROUP BY t.id
+                 ORDER BY t.name COLLATE NOCASE"
+            }
+        };
+        let mut stmt = self.conn.prepare(sql)?;
+        let names = stmt
+            .query_map([], |row| {
+                Ok(NameCount {
+                    name: row.get(0)?,
+                    count: row.get(1)?,
+                })
+            })?
+            .collect::<Result<Vec<_>, _>>()?;
+        Ok(names)
     }
 
     pub fn lists(&self) -> Result<Vec<BookList>, DbError> {
@@ -650,6 +720,25 @@ mod tests {
         assert_eq!(authors.len(), 2);
         assert_eq!(authors[0].author, "Frank Herbert");
         assert_eq!(authors[0].count, 2);
+
+        let categories = library.categories().unwrap();
+        assert_eq!(categories.len(), 1);
+        assert_eq!(categories[0].name, "Fiction");
+        assert_eq!(categories[0].count, 3);
+        let fiction = library
+            .books(&BookScope::Category("fiction".to_string()))
+            .unwrap();
+        assert_eq!(fiction.len(), 3);
+        let tags = library.tags().unwrap();
+        assert_eq!(tags.len(), 1);
+        assert_eq!(tags[0].name, "reread");
+        assert_eq!(
+            library
+                .books(&BookScope::Tag("Reread".to_string()))
+                .unwrap()
+                .len(),
+            3
+        );
 
         let herbert = library
             .books(&BookScope::Author("Frank Herbert".to_string()))

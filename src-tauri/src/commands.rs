@@ -18,6 +18,8 @@ pub struct AppState {
 pub enum ScopeQuery {
     All,
     Author { author: String },
+    Category { name: String },
+    Tag { name: String },
     List { id: i64 },
 }
 
@@ -149,6 +151,8 @@ pub fn books(state: State<AppState>, scope: ScopeQuery) -> Result<Vec<BookCard>,
     let scope = match scope {
         ScopeQuery::All => BookScope::All,
         ScopeQuery::Author { author } => BookScope::Author(author),
+        ScopeQuery::Category { name } => BookScope::Category(name),
+        ScopeQuery::Tag { name } => BookScope::Tag(name),
         ScopeQuery::List { id } => BookScope::List(id),
     };
     with_library(&state, |library| {
@@ -187,6 +191,20 @@ fn book_card(book: Book) -> BookCard {
         author_label,
         format_label,
     }
+}
+
+#[tauri::command]
+pub fn categories(state: State<AppState>) -> Result<Vec<db::NameCount>, String> {
+    with_library(&state, |library| {
+        library.categories().map_err(|err| err.to_string())
+    })
+}
+
+#[tauri::command]
+pub fn tags(state: State<AppState>) -> Result<Vec<db::NameCount>, String> {
+    with_library(&state, |library| {
+        library.tags().map_err(|err| err.to_string())
+    })
 }
 
 #[tauri::command]
@@ -529,6 +547,11 @@ mod tests {
         let author: ScopeQuery =
             serde_json::from_str(r#"{"kind":"author","author":"Octavia Butler"}"#).unwrap();
         assert!(matches!(author, ScopeQuery::Author { author } if author == "Octavia Butler"));
+        let category: ScopeQuery =
+            serde_json::from_str(r#"{"kind":"category","name":"Fiction"}"#).unwrap();
+        assert!(matches!(category, ScopeQuery::Category { name } if name == "Fiction"));
+        let tag: ScopeQuery = serde_json::from_str(r#"{"kind":"tag","name":"unread"}"#).unwrap();
+        assert!(matches!(tag, ScopeQuery::Tag { name } if name == "unread"));
     }
 
     #[test]

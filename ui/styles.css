@@ -89,7 +89,7 @@ aside {
   text-transform: uppercase;
 }
 
-#library-nav, #list-nav {
+#library-nav, #category-nav, #tag-nav, #list-nav {
   display: flex;
   flex-direction: column;
   gap: 2px;
@@ -98,11 +98,19 @@ aside {
 .nav, .list-row, .author-row {
   display: flex;
   align-items: center;
+  justify-content: space-between;
+  gap: 12px;
   width: 100%;
   text-align: left;
   background: transparent;
   border: 0;
   padding: 8px 12px;
+}
+
+.nav span:first-child {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .list-row { padding: 0; }

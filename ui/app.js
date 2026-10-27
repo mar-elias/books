@@ -3,6 +3,8 @@ const BOOK_DRAG = "application/x-book-id";
 const viewState = { kind: "all" };
 let books = [];
 let authors = [];
+let categories = [];
+let tags = [];
 let lists = [];
 let search = "";
 let reloadToken = 0;
@@ -11,6 +13,8 @@ let toastTimer = 0;
 let editingId = null;
 
 const libraryNav = document.querySelector("#library-nav");
+const categoryNav = document.querySelector("#category-nav");
+const tagNav = document.querySelector("#tag-nav");
 const listNav = document.querySelector("#list-nav");
 const content = document.querySelector("#content");
 const heading = document.querySelector("#heading");
@@ -80,6 +84,8 @@ function coverSrc(id) {
 
 function scopePayload() {
   if (viewState.kind === "author") return { kind: "author", author: viewState.author };
+  if (viewState.kind === "category") return { kind: "category", name: viewState.name };
+  if (viewState.kind === "tag") return { kind: "tag", name: viewState.name };
   if (viewState.kind === "list") return { kind: "list", id: viewState.id };
   return { kind: "all" };
 }
@@ -87,7 +93,9 @@ function scopePayload() {
 function headingText() {
   if (viewState.kind === "authors") return "Authors";
   if (viewState.kind === "author") return viewState.label;
-  if (viewState.kind === "list") return viewState.name;
+  if (viewState.kind === "category" || viewState.kind === "tag" || viewState.kind === "list") {
+    return viewState.name;
+  }
   return "All books";
 }
 
@@ -95,10 +103,20 @@ async function reload() {
   const token = ++reloadToken;
   try {
     const nextLists = await invoke("lists");
+    const nextCategories = await invoke("categories");
+    const nextTags = await invoke("tags");
+    if (viewState.kind === "category" && !nextCategories.some((item) => item.name === viewState.name)) {
+      viewState.kind = "all";
+    }
+    if (viewState.kind === "tag" && !nextTags.some((item) => item.name === viewState.name)) {
+      viewState.kind = "all";
+    }
     const nextAuthors = viewState.kind === "authors" ? await invoke("authors") : [];
     const nextBooks = viewState.kind === "authors" ? [] : await invoke("books", { scope: scopePayload() });
     if (token !== reloadToken) return;
     lists = nextLists;
+    categories = nextCategories;
+    tags = nextTags;
     authors = nextAuthors;
     books = nextBooks;
     if (viewState.kind === "list") {
@@ -117,6 +135,8 @@ function render() {
   heading.textContent = headingText();
   backButton.hidden = viewState.kind !== "author";
   renderLibrary();
+  renderNameNav(categoryNav, categories, "category");
+  renderNameNav(tagNav, tags, "tag");
   renderLists();
   if (viewState.kind === "authors") renderAuthors();
   else renderBooks();
@@ -141,6 +161,33 @@ function navButton(label, active, onClick) {
   button.type = "button";
   button.className = active ? "nav active" : "nav";
   button.textContent = label;
+  button.addEventListener("click", onClick);
+  return button;
+}
+
+function renderNameNav(nav, items, kind) {
+  nav.replaceChildren();
+  for (const item of items) {
+    nav.append(
+      nameButton(item, viewState.kind === kind && viewState.name === item.name, () => {
+        viewState.kind = kind;
+        viewState.name = item.name;
+        reload();
+      }),
+    );
+  }
+}
+
+function nameButton(item, active, onClick) {
+  const button = document.createElement("button");
+  button.type = "button";
+  button.className = active ? "nav active" : "nav";
+  const name = document.createElement("span");
+  name.textContent = item.name;
+  const count = document.createElement("span");
+  count.className = "count";
+  count.textContent = String(item.count);
+  button.append(name, count);
   button.addEventListener("click", onClick);
   return button;
 }
