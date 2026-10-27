@@ -9,6 +9,7 @@
   <body>
     <div id="app">
       <aside>
+        <div class="sidebar-scroll">
         <p class="app-name">Mar-Elias Books</p>
         <p class="section"><b>Library</b></p>
         <nav id="library-nav" aria-label="Library"></nav>
@@ -27,6 +28,15 @@
           <button id="new-list" class="text icon" type="button" aria-label="New list">+</button>
         </div>
         <div id="list-nav"></div>
+        </div>
+        <div class="sidebar-foot">
+          <button id="settings" class="text" type="button" aria-label="Settings">
+            <svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true">
+              <circle cx="8" cy="8" r="2.15" fill="none" stroke="currentColor" stroke-width="1.4" />
+              <path d="M8 1.5v1.8M8 12.7v1.8M1.5 8h1.8M12.7 8h1.8M3.35 3.35l1.25 1.25M11.4 11.4l1.25 1.25M12.65 3.35 11.4 4.6M4.6 11.4l-1.25 1.25" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" />
+            </svg>
+          </button>
+        </div>
       </aside>
       <main>
         <header>
@@ -124,6 +134,22 @@
         <div class="dialog-actions">
           <button id="confirm-cancel" type="button">Cancel</button>
           <button id="confirm-ok" class="danger" type="submit">Remove</button>
+        </div>
+      </form>
+    </dialog>
+
+    <dialog id="settings-dialog">
+      <form id="settings-form">
+        <h2>Settings</h2>
+        <label>Library database path
+          <input id="settings-database" type="text" readonly spellcheck="false" />
+        </label>
+        <label>Covers folder path (automatically generated)
+          <input id="settings-covers" type="text" readonly spellcheck="false" />
+        </label>
+        <p id="settings-status"></p>
+        <div class="dialog-actions">
+          <button id="settings-close" class="primary" type="button">Close</button>
         </div>
       </form>
     </dialog>

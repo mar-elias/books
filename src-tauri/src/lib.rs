@@ -32,7 +32,8 @@ pub fn run() {
             commands::delete_list,
             commands::add_book_to_list,
             commands::remove_book_from_list,
-            commands::open_book
+            commands::open_book,
+            commands::library_paths
         ])
         .run(tauri::generate_context!())
         .expect("error while running Books");

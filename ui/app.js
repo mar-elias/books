@@ -40,6 +40,7 @@ const toastElement = document.querySelector("#toast");
 const bookDialog = document.querySelector("#book-dialog");
 const promptDialog = document.querySelector("#prompt-dialog");
 const confirmDialog = document.querySelector("#confirm-dialog");
+const settingsDialog = document.querySelector("#settings-dialog");
 
 function invoke(command, args) {
   return window.__TAURI__.core.invoke(command, args);
@@ -744,6 +745,23 @@ async function removeList(list) {
   }
 }
 
+async function openSettings() {
+  const database = document.querySelector("#settings-database");
+  const covers = document.querySelector("#settings-covers");
+  const status = document.querySelector("#settings-status");
+  database.value = "";
+  covers.value = "";
+  status.textContent = "";
+  settingsDialog.showModal();
+  try {
+    const paths = await invoke("library_paths");
+    database.value = paths.databasePath;
+    covers.value = paths.coversPath;
+  } catch (error) {
+    status.textContent = errorText(error);
+  }
+}
+
 function bind() {
   applyZoom();
   document.querySelector("#zoom-out").addEventListener("click", () => setZoom(zoomLevel - 1));
@@ -799,6 +817,16 @@ function bind() {
   });
   document.querySelector("#prompt-cancel").addEventListener("click", () => promptDialog.close());
   document.querySelector("#confirm-cancel").addEventListener("click", () => confirmDialog.close());
+  document.querySelector("#settings").addEventListener("click", () => {
+    openSettings().catch((error) => {
+      document.querySelector("#settings-status").textContent = errorText(error);
+    });
+  });
+  document.querySelector("#settings-close").addEventListener("click", () => settingsDialog.close());
+  document.querySelector("#settings-form").addEventListener("submit", (event) => {
+    event.preventDefault();
+    settingsDialog.close();
+  });
   backButton.addEventListener("click", () => {
     viewState.kind = "authors";
     reload();

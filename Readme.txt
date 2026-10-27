@@ -1,3 +1,8 @@
+#Similar apps:
+1. https://github.com/everydaythingssoftware/citadel
+2. Apple Books
+
+# TODO:
 implement an app for linux desktop to organize pdf and epub books
 
 I want to be able to add a new book to the database: Has title, author, year, categories, tags, front cover and a link to a local file. If the front cover isn't given, it should be extracted from the first page of the pdf/epub.

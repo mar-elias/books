@@ -180,6 +180,21 @@ fn cover_bytes(
     metadata::title_card_png(title, author).map_err(|err| err.to_string())
 }
 
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct LibraryPaths {
+    pub database_path: String,
+    pub covers_path: String,
+}
+
+#[tauri::command]
+pub fn library_paths() -> LibraryPaths {
+    LibraryPaths {
+        database_path: db::database_path().to_string_lossy().into_owned(),
+        covers_path: db::covers_dir().to_string_lossy().into_owned(),
+    }
+}
+
 #[tauri::command]
 pub fn books(state: State<AppState>, scope: ScopeQuery) -> Result<Vec<BookCard>, String> {
     let scope = match scope {
@@ -638,6 +653,16 @@ mod tests {
         assert!(matches!(category, ScopeQuery::Category { name } if name == "Fiction"));
         let tag: ScopeQuery = serde_json::from_str(r#"{"kind":"tag","name":"unread"}"#).unwrap();
         assert!(matches!(tag, ScopeQuery::Tag { name } if name == "unread"));
+    }
+
+    #[test]
+    fn library_paths_follow_the_catalog_directories() {
+        let paths = library_paths();
+        assert!(paths.database_path.ends_with("ebook-reader/library.db"));
+        assert!(paths.covers_path.ends_with("ebook-reader/covers"));
+        let json = serde_json::to_value(&paths).unwrap();
+        assert_eq!(json["databasePath"], paths.database_path);
+        assert_eq!(json["coversPath"], paths.covers_path);
     }
 
     #[test]

@@ -71,12 +71,39 @@ button.danger {
 aside {
   width: 240px;
   flex: none;
+  display: flex;
+  flex-direction: column;
   background: var(--sidebar);
   border-right: 1px solid var(--line);
+  overflow: hidden;
+  padding: 18px 12px 12px;
+}
+
+.sidebar-scroll {
+  flex: 1;
+  min-height: 0;
   overflow: auto;
   overscroll-behavior: contain;
-  padding: 18px 12px 24px;
 }
+
+.sidebar-foot {
+  flex: none;
+  display: flex;
+  margin: 12px -12px 0;
+  padding: 8px 12px 0;
+  border-top: 1px solid var(--line);
+}
+
+#settings {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+}
+
+#settings svg { display: block; }
 
 .app-name {
   margin: 4px 12px 18px;
@@ -444,6 +471,14 @@ dialog {
 #book-dialog {
   width: min(760px, calc(100% - 32px));
   container-type: inline-size;
+}
+
+#settings-dialog {
+  width: min(640px, calc(100% - 32px));
+}
+
+#settings-dialog input[readonly] {
+  color: var(--ink);
 }
 
 dialog::backdrop { background: rgba(36, 31, 26, 0.35); }
