@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Books</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <div id="app">
+      <aside>
+        <p class="app-name">Books</p>
+        <p class="section">Library</p>
+        <nav id="library-nav" aria-label="Library"></nav>
+        <p class="section">Lists</p>
+        <div id="list-nav"></div>
+        <button id="new-list" class="text" type="button">New list</button>
+      </aside>
+      <main>
+        <header>
+          <button id="back" class="text" type="button" hidden>Back</button>
+          <h1 id="heading">All books</h1>
+          <div class="header-actions">
+            <input id="search" type="search" placeholder="Search" aria-label="Search" />
+            <button id="add-book" class="primary" type="button">Add book</button>
+          </div>
+        </header>
+        <div id="content"></div>
+      </main>
+    </div>
+
+    <div id="menu" role="menu" hidden></div>
+    <p id="toast" role="status" hidden></p>
+
+    <dialog id="book-dialog">
+      <form id="book-form">
+        <h2 id="book-dialog-title">Add book</h2>
+        <div class="file-row">
+          <button id="choose-file" type="button">Choose file</button>
+          <p id="file-label" title="">No file chosen</p>
+        </div>
+        <label>Title <input id="field-title" type="text" /></label>
+        <label>Author <input id="field-author" type="text" /></label>
+        <label>Year <input id="field-year" type="text" inputmode="numeric" /></label>
+        <label>Categories <input id="field-categories" type="text" placeholder="Fiction, History" /></label>
+        <label>Tags <input id="field-tags" type="text" placeholder="unread, favorite" /></label>
+        <img id="cover-preview" alt="" />
+        <button id="choose-cover" type="button">Choose cover</button>
+        <p id="book-status"></p>
+        <div class="dialog-actions">
+          <button id="book-cancel" type="button">Cancel</button>
+          <button id="book-save" class="primary" type="submit" disabled>Save</button>
+        </div>
+      </form>
+    </dialog>
+
+    <dialog id="prompt-dialog">
+      <form id="prompt-form">
+        <h2 id="prompt-title">New list</h2>
+        <input id="prompt-input" type="text" />
+        <div class="dialog-actions">
+          <button id="prompt-cancel" type="button">Cancel</button>
+          <button id="prompt-ok" class="primary" type="submit">Create</button>
+        </div>
+      </form>
+    </dialog>
+
+    <dialog id="confirm-dialog">
+      <form id="confirm-form">
+        <h2 id="confirm-title">Remove book?</h2>
+        <p id="confirm-message"></p>
+        <div class="dialog-actions">
+          <button id="confirm-cancel" type="button">Cancel</button>
+          <button id="confirm-ok" class="danger" type="submit">Remove</button>
+        </div>
+      </form>
+    </dialog>
+
+    <script src="app.js"></script>
+  </body>
+</html>

@@ -173,9 +173,52 @@ fn draw_text(context: &cairo::Context, text: &str, x: f64, y: f64, width: f64, s
     pangocairo::functions::show_layout(context, &layout);
 }
 
+fn file_uri(path: &Path) -> String {
+    let absolute = if path.is_absolute() {
+        path.to_path_buf()
+    } else {
+        std::env::current_dir()
+            .map(|cwd| cwd.join(path))
+            .unwrap_or_else(|_| path.to_path_buf())
+    };
+    let mut uri = String::from("file://");
+    for component in absolute.components() {
+        match component {
+            Component::RootDir => {}
+            Component::Normal(part) => {
+                uri.push('/');
+                for byte in part.to_string_lossy().bytes() {
+                    match byte {
+                        b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'-' | b'_' | b'.' | b'~' => {
+                            uri.push(byte as char);
+                        }
+                        _ => uri.push_str(&format!("%{byte:02X}")),
+                    }
+                }
+            }
+            Component::CurDir => {}
+            Component::ParentDir => uri.push_str("/.."),
+            Component::Prefix(_) => {}
+        }
+    }
+    if uri == "file://" {
+        uri.push('/');
+    }
+    uri
+}
+
+fn year_from_unix_local(timestamp: i64) -> Option<i32> {
+    let seconds = timestamp as libc::time_t;
+    let mut date = unsafe { std::mem::zeroed::<libc::tm>() };
+    if unsafe { libc::localtime_r(&seconds, &mut date) }.is_null() {
+        return None;
+    }
+    let year = date.tm_year + 1900;
+    (1000..=9999).contains(&year).then_some(year)
+}
+
 fn extract_pdf(path: &Path) -> Result<Extracted, ExtractError> {
-    let uri = gtk4::glib::filename_to_uri(path, None)
-        .map_err(|err| ExtractError::Pdf(err.to_string()))?;
+    let uri = file_uri(path);
     let document = poppler::Document::from_file(uri.as_str(), None)
         .map_err(|err| ExtractError::Pdf(err.to_string()))?;
     let title = clean_meta(document.title().as_deref()).unwrap_or_else(|| fallback_title(path));
@@ -196,11 +239,8 @@ fn extract_pdf(path: &Path) -> Result<Extracted, ExtractError> {
 fn pdf_year(document: &poppler::Document) -> Option<i32> {
     let timestamp = document.creation_date();
     if timestamp > 0 {
-        if let Ok(date) = gtk4::glib::DateTime::from_unix_local(timestamp as i64) {
-            let year = date.year();
-            if (1000..=9999).contains(&year) {
-                return Some(year);
-            }
+        if let Some(year) = year_from_unix_local(timestamp as i64) {
+            return Some(year);
         }
     }
     document.metadata().and_then(|metadata| year_in_text(&metadata))
@@ -531,6 +571,12 @@ mod tests {
     use std::path::PathBuf;
     use zip::write::SimpleFileOptions;
     use zip::ZipWriter;
+
+    #[test]
+    fn format_labels() {
+        assert_eq!(BookFormat::Pdf.label(), "PDF");
+        assert_eq!(BookFormat::Epub.label(), "EPUB");
+    }
 
     fn epub_with(opf: &str, files: &[(&str, &[u8])]) -> PathBuf {
         let dir = std::env::temp_dir().join(format!(

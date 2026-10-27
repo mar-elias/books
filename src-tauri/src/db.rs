@@ -2,8 +2,10 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 use rusqlite::{Connection, OptionalExtension, params};
+use serde::{Deserialize, Serialize};
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct Book {
     pub id: i64,
     pub title: String,
@@ -16,7 +18,8 @@ pub struct Book {
     pub tags: Vec<String>,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct Draft {
     pub title: String,
     pub author: String,
@@ -28,13 +31,15 @@ pub struct Draft {
     pub cover_png: Vec<u8>,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct AuthorGroup {
     pub author: String,
     pub count: i64,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct BookList {
     pub id: i64,
     pub name: String,
@@ -416,18 +421,30 @@ impl Library {
         fs::write(&path, png)?;
         Ok(path)
     }
+
+    pub fn cover_directory(&self) -> &Path {
+        &self.covers_dir
+    }
 }
 
 pub fn database_path() -> PathBuf {
-    gtk4::glib::user_data_dir()
+    xdg_dir(dirs::data_dir(), ".local/share")
         .join("ebook-reader")
         .join("library.db")
 }
 
 pub fn covers_dir() -> PathBuf {
-    gtk4::glib::user_cache_dir()
+    xdg_dir(dirs::cache_dir(), ".cache")
         .join("ebook-reader")
         .join("covers")
+}
+
+fn xdg_dir(primary: Option<PathBuf>, fallback: &str) -> PathBuf {
+    primary.unwrap_or_else(|| {
+        dirs::home_dir()
+            .map(|home| home.join(fallback))
+            .unwrap_or_else(|| PathBuf::from("."))
+    })
 }
 
 pub fn author_label(author: &str) -> String {
@@ -612,6 +629,36 @@ mod tests {
         assert!(!dir.join("covers").join(format!("{}.png", first.id)).exists());
 
         let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn unknown_author_label() {
+        assert_eq!(author_label("  "), "Unknown");
+        assert_eq!(author_label("Ada"), "Ada");
+    }
+
+    #[test]
+    fn default_paths_follow_xdg() {
+        assert!(database_path().ends_with("ebook-reader/library.db"));
+        assert!(covers_dir().ends_with("ebook-reader/covers"));
+    }
+
+    #[test]
+    fn book_json_uses_camel_case() {
+        let book = Book {
+            id: 1,
+            title: "Dune".to_string(),
+            author: "Frank Herbert".to_string(),
+            year: Some(1965),
+            file_path: "/books/dune.epub".to_string(),
+            format: "epub".to_string(),
+            cover_path: None,
+            categories: vec!["Fiction".to_string()],
+            tags: Vec::new(),
+        };
+        let json = serde_json::to_value(&book).unwrap();
+        assert_eq!(json["filePath"], "/books/dune.epub");
+        assert!(json.get("file_path").is_none());
     }
 
     #[test]

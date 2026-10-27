@@ -1,0 +1,35 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "Books",
+  "version": "0.1.0",
+  "identifier": "com.local.books",
+  "build": {
+    "frontendDist": "../ui"
+  },
+  "app": {
+    "withGlobalTauri": true,
+    "windows": [
+      {
+        "label": "main",
+        "title": "Books",
+        "width": 1100,
+        "height": 720,
+        "backgroundColor": "#f3efe6"
+      }
+    ],
+    "security": {
+      "csp": "default-src 'self'; img-src 'self' cover: data: blob:; connect-src 'self' cover:; style-src 'self'; script-src 'self'"
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": "all",
+    "icon": [
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/128x128@2x.png",
+      "icons/icon.png",
+      "icons/icon.ico"
+    ]
+  }
+}
