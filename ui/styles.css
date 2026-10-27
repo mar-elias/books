@@ -325,8 +325,8 @@ input[type="search"] { width: 220px; }
 }
 
 .book.selected {
-  background: #dfd6c8;
-  box-shadow: 0 0 0 8px #dfd6c8;
+  background: #c4b6a4;
+  box-shadow: 0 0 0 8px #c4b6a4;
 }
 
 .cover {
