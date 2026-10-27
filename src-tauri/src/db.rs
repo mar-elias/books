@@ -16,6 +16,7 @@ pub struct Book {
     pub cover_path: Option<String>,
     pub categories: Vec<String>,
     pub tags: Vec<String>,
+    pub list_ids: Vec<i64>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -215,6 +216,7 @@ impl Library {
         };
         book.categories = self.names_for(book.id, NameKind::Category)?;
         book.tags = self.names_for(book.id, NameKind::Tag)?;
+        book.list_ids = self.list_ids_for(book.id)?;
         Ok(Some(book))
     }
 
@@ -279,6 +281,7 @@ impl Library {
         for book in &mut books {
             book.categories = self.names_for(book.id, NameKind::Category)?;
             book.tags = self.names_for(book.id, NameKind::Tag)?;
+            book.list_ids = self.list_ids_for(book.id)?;
         }
         Ok(books)
     }
@@ -544,6 +547,16 @@ impl Library {
         Ok(names)
     }
 
+    fn list_ids_for(&self, book_id: i64) -> Result<Vec<i64>, DbError> {
+        let mut stmt = self.conn.prepare(
+            "SELECT list_id FROM list_books WHERE book_id = ?1 ORDER BY position, list_id",
+        )?;
+        let ids = stmt
+            .query_map(params![book_id], |row| row.get(0))?
+            .collect::<Result<Vec<i64>, _>>()?;
+        Ok(ids)
+    }
+
     fn write_cover(&self, id: i64, png: &[u8]) -> Result<PathBuf, DbError> {
         fs::create_dir_all(&self.covers_dir)?;
         let path = self.covers_dir.join(format!("{id}.png"));
@@ -649,6 +662,7 @@ fn map_book_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<Book> {
         cover_path: row.get(6)?,
         categories: Vec::new(),
         tags: Vec::new(),
+        list_ids: Vec::new(),
     })
 }
 
@@ -777,8 +791,10 @@ mod tests {
         let members = library.books(&BookScope::List(list.id)).unwrap();
         assert_eq!(members.len(), 1);
         assert_eq!(members[0].id, first.id);
+        assert_eq!(members[0].list_ids, vec![list.id]);
 
         library.remove_book_from_list(list.id, first.id).unwrap();
+        assert!(library.book(first.id).unwrap().unwrap().list_ids.is_empty());
         assert!(library.books(&BookScope::List(list.id)).unwrap().is_empty());
 
         library.rename_list(list.id, "Later").unwrap();
@@ -899,6 +915,7 @@ mod tests {
             cover_path: None,
             categories: vec!["Fiction".to_string()],
             tags: Vec::new(),
+            list_ids: Vec::new(),
         };
         let json = serde_json::to_value(&book).unwrap();
         assert_eq!(json["filePath"], "/books/dune.epub");

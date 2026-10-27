@@ -10,6 +10,11 @@ let coverVersion = 0;
 let toastTimer = 0;
 let editingId = null;
 let editingTitle = "";
+let editingListIds = [];
+
+const ZOOM_WIDTHS = [112, 136, 160, 192, 232, 280, 336];
+const ZOOM_KEY = "books-zoom";
+let zoomLevel = storedZoom();
 
 const libraryNav = document.querySelector("#library-nav");
 const categoryNav = document.querySelector("#category-nav");
@@ -37,6 +42,36 @@ function errorText(error) {
 
 function query() {
   return search.trim().toLowerCase();
+}
+
+function storedZoom() {
+  try {
+    const raw = localStorage.getItem(ZOOM_KEY);
+    if (raw == null) return 2;
+    const stored = Number(raw);
+    if (Number.isInteger(stored) && stored >= 0 && stored < ZOOM_WIDTHS.length) return stored;
+  } catch (_error) {
+    /* keep the default size when storage is unavailable */
+  }
+  return 2;
+}
+
+function applyZoom() {
+  document.documentElement.style.setProperty("--book-width", `${ZOOM_WIDTHS[zoomLevel]}px`);
+  const zoomOut = document.querySelector("#zoom-out");
+  const zoomIn = document.querySelector("#zoom-in");
+  if (zoomOut) zoomOut.disabled = zoomLevel === 0;
+  if (zoomIn) zoomIn.disabled = zoomLevel === ZOOM_WIDTHS.length - 1;
+}
+
+function setZoom(next) {
+  zoomLevel = Math.max(0, Math.min(ZOOM_WIDTHS.length - 1, next));
+  try {
+    localStorage.setItem(ZOOM_KEY, String(zoomLevel));
+  } catch (_error) {
+    /* the chosen size still applies for this visit */
+  }
+  applyZoom();
 }
 
 function toast(message) {
@@ -267,16 +302,6 @@ function renderLists() {
   }
 }
 
-async function addBookToList(list, bookId) {
-  try {
-    const added = await invoke("add_book_to_list", { listId: list.id, bookId });
-    toast(added ? `Added to ${list.name}` : `Already in ${list.name}`);
-    await reload();
-  } catch (error) {
-    toast(errorText(error));
-  }
-}
-
 function renderBooks() {
   const filtering = query().length > 0;
   const visible = books.filter((book) => bookMatches(book, query()));
@@ -311,22 +336,16 @@ function bookTile(book) {
   if (!book.formatLabel) badge.hidden = true;
   const title = document.createElement("p");
   title.className = "book-title";
+  title.dir = "auto";
   title.textContent = book.title;
   frame.append(image, badge);
   article.append(frame, title);
   article.addEventListener("dblclick", () => openBook(book.id));
   article.addEventListener("contextmenu", (event) => {
     event.preventDefault();
-    const listItems = lists.length
-      ? lists.map((list) => ({
-          label: list.name,
-          onSelect: () => addBookToList(list, book.id),
-        }))
-      : [{ label: "No lists", disabled: true }];
     const items = [
       { label: "Open", onSelect: () => openBook(book.id) },
       { label: "Edit", onSelect: () => editBook(book) },
-      { label: "Add to list", children: listItems },
     ];
     if (viewState.kind === "list") {
       items.push({ label: "Remove from list", onSelect: () => removeFromList(book.id) });
@@ -428,6 +447,7 @@ function editBook(book) {
 function openBookDialog(book) {
   editingId = book ? book.id : null;
   editingTitle = book ? book.title : "";
+  editingListIds = book && book.listIds ? book.listIds.map(Number) : [];
   document.querySelector("#book-dialog-title").textContent = book ? "Edit book" : "Add book";
   document.querySelector("#book-delete").hidden = !book;
   document.querySelector("#field-file").value = book ? book.filePath : "";
@@ -438,12 +458,21 @@ function openBookDialog(book) {
   document.querySelector("#field-title").value = book ? book.title : "";
   document.querySelector("#field-author").value = book ? book.author : "";
   document.querySelector("#field-year").value = book && book.year != null ? String(book.year) : "";
-  renderChoices(
-    document.querySelector("#category-choices"),
-    categories,
+  renderPicker(
+    document.querySelector("#category-picker"),
+    categories.map((item) => ({ value: item.name, label: item.name })),
     book ? book.categories : [],
   );
-  renderChoices(document.querySelector("#tag-choices"), tags, book ? book.tags : []);
+  renderPicker(
+    document.querySelector("#tag-picker"),
+    tags.map((item) => ({ value: item.name, label: item.name })),
+    book ? book.tags : [],
+  );
+  renderPicker(
+    document.querySelector("#list-picker"),
+    lists.map((item) => ({ value: String(item.id), label: item.name })),
+    editingListIds.map(String),
+  );
   const preview = document.querySelector("#cover-preview");
   if (book) {
     preview.hidden = false;
@@ -469,12 +498,15 @@ async function saveBook(event) {
     year: document.querySelector("#field-year").value,
     filePath: document.querySelector("#field-file").value,
     coverPath: document.querySelector("#field-cover").value,
-    categories: chosenNames(document.querySelector("#category-choices")),
-    tags: chosenNames(document.querySelector("#tag-choices")),
+    categories: chosenValues(document.querySelector("#category-picker")).join(", "),
+    tags: chosenValues(document.querySelector("#tag-picker")).join(", "),
   };
+  const listIds = chosenValues(document.querySelector("#list-picker")).map(Number);
   try {
-    if (editingId == null) await invoke("add_book", { draft });
-    else await invoke("update_book", { id: editingId, draft });
+    const saved = editingId == null
+      ? await invoke("add_book", { draft })
+      : await invoke("update_book", { id: editingId, draft });
+    await syncLists(saved.id, listIds, editingListIds);
     bookDialog.close();
     await reload();
   } catch (error) {
@@ -484,29 +516,57 @@ async function saveBook(event) {
   }
 }
 
-function renderChoices(container, items, selected) {
-  container.replaceChildren();
+function renderPicker(picker, items, selected) {
+  const button = picker.querySelector(".picker-button");
+  const summary = button.querySelector("span");
+  const menu = picker.querySelector(".picker-menu");
+  menu.hidden = true;
+  menu.replaceChildren();
+  button.disabled = items.length === 0;
   if (items.length === 0) {
-    const note = document.createElement("p");
-    note.className = "choice-empty";
-    note.textContent = "Add one with + in the sidebar.";
-    container.append(note);
+    summary.textContent = picker.dataset.empty;
     return;
   }
-  const chosen = new Set(selected.map((name) => name.toLowerCase()));
+  const chosen = new Set(selected.map((value) => String(value).toLowerCase()));
   for (const item of items) {
     const label = document.createElement("label");
     const input = document.createElement("input");
     input.type = "checkbox";
-    input.value = item.name;
-    input.checked = chosen.has(item.name.toLowerCase());
-    label.append(input, document.createTextNode(item.name));
-    container.append(label);
+    input.value = String(item.value);
+    input.checked = chosen.has(String(item.value).toLowerCase());
+    input.addEventListener("change", () => {
+      summary.textContent = pickerSummary(menu);
+    });
+    label.append(input, document.createTextNode(item.label));
+    menu.append(label);
+  }
+  summary.textContent = pickerSummary(menu);
+}
+
+function pickerSummary(menu) {
+  const names = [...menu.querySelectorAll("input:checked")].map((input) => input.parentElement.textContent.trim());
+  return names.length ? names.join(", ") : "None";
+}
+
+function chosenValues(picker) {
+  return [...picker.querySelectorAll(".picker-menu input:checked")].map((input) => input.value);
+}
+
+function closePickers(except) {
+  for (const menu of document.querySelectorAll(".picker-menu")) {
+    if (menu !== except) menu.hidden = true;
   }
 }
 
-function chosenNames(container) {
-  return [...container.querySelectorAll("input:checked")].map((input) => input.value).join(", ");
+async function syncLists(bookId, selected, previous) {
+  const next = new Set(selected);
+  const previousIds = new Set(previous);
+  for (const id of next) {
+    if (!previousIds.has(id)) await invoke("add_book_to_list", { listId: id, bookId });
+  }
+  for (const id of previousIds) {
+    if (!next.has(id)) await invoke("remove_book_from_list", { listId: id, bookId });
+  }
 }
 
 function askPrompt(title, confirm, value) {
@@ -596,6 +656,9 @@ async function removeList(list) {
 }
 
 function bind() {
+  applyZoom();
+  document.querySelector("#zoom-out").addEventListener("click", () => setZoom(zoomLevel - 1));
+  document.querySelector("#zoom-in").addEventListener("click", () => setZoom(zoomLevel + 1));
   document.querySelector("#new-list").addEventListener("click", async () => {
     const name = await askPrompt("New list", "Create", "");
     if (name == null) return;
@@ -616,6 +679,20 @@ function bind() {
     addCatalogName("New tag", "Add", "create_tag");
   });
   document.querySelector("#add-book").addEventListener("click", () => openBookDialog(null));
+  for (const picker of document.querySelectorAll(".picker")) {
+    const button = picker.querySelector(".picker-button");
+    const menu = picker.querySelector(".picker-menu");
+    button.addEventListener("click", (event) => {
+      event.stopPropagation();
+      if (button.disabled) return;
+      const willOpen = menu.hidden;
+      closePickers();
+      menu.hidden = !willOpen;
+    });
+  }
+  document.addEventListener("click", (event) => {
+    if (!event.target.closest(".picker")) closePickers();
+  });
   document.querySelector("#book-form").addEventListener("submit", (event) => {
     saveBook(event).catch((error) => {
       document.querySelector("#book-status").textContent = errorText(error);
@@ -643,7 +720,24 @@ function bind() {
   });
   window.addEventListener("keydown", (event) => {
     if (event.key === "Escape") hideMenu();
+    if (!(event.ctrlKey || event.metaKey) || event.altKey) return;
+    if (event.target.closest("input, textarea") || document.querySelector("dialog[open]")) return;
+    if (event.key === "=" || event.key === "+") {
+      event.preventDefault();
+      setZoom(zoomLevel + 1);
+    } else if (event.key === "-" || event.key === "_") {
+      event.preventDefault();
+      setZoom(zoomLevel - 1);
+    } else if (event.key === "0") {
+      event.preventDefault();
+      setZoom(2);
+    }
   });
+  content.addEventListener("wheel", (event) => {
+    if (!event.ctrlKey && !event.metaKey) return;
+    event.preventDefault();
+    setZoom(zoomLevel + (event.deltaY < 0 ? 1 : -1));
+  }, { passive: false });
   content.addEventListener("scroll", hideMenu);
 }
 

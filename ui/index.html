@@ -31,6 +31,10 @@
           <button id="back" class="text" type="button" hidden>Back</button>
           <h1 id="heading">All books</h1>
           <div class="header-actions">
+            <div class="zoom" role="group" aria-label="Zoom">
+              <button id="zoom-out" class="text" type="button" aria-label="Zoom out">−</button>
+              <button id="zoom-in" class="text" type="button" aria-label="Zoom in">+</button>
+            </div>
             <input id="search" type="search" placeholder="Search" aria-label="Search" />
             <button id="add-book" class="primary" type="button">Add book</button>
           </div>
@@ -50,14 +54,21 @@
         <label>Title <input id="field-title" type="text" /></label>
         <label>Author <input id="field-author" type="text" /></label>
         <label>Year <input id="field-year" type="text" inputmode="numeric" /></label>
-        <fieldset class="choices">
-          <legend>Categories</legend>
-          <div id="category-choices"></div>
-        </fieldset>
-        <fieldset class="choices">
-          <legend>Tags</legend>
-          <div id="tag-choices"></div>
-        </fieldset>
+        <div class="picker" id="category-picker" data-empty="Add one with + in the sidebar.">
+          <span>Categories</span>
+          <button type="button" class="picker-button"><span>None</span></button>
+          <div class="picker-menu" hidden></div>
+        </div>
+        <div class="picker" id="tag-picker" data-empty="Add one with + in the sidebar.">
+          <span>Tags</span>
+          <button type="button" class="picker-button"><span>None</span></button>
+          <div class="picker-menu" hidden></div>
+        </div>
+        <div class="picker" id="list-picker" data-empty="No lists yet.">
+          <span>Lists</span>
+          <button type="button" class="picker-button"><span>None</span></button>
+          <div class="picker-menu" hidden></div>
+        </div>
         <img id="cover-preview" alt="" hidden />
         <p id="book-status"></p>
         <div class="dialog-actions">

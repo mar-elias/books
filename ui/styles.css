@@ -10,6 +10,7 @@
   --accent-ink: #f6f1e7;
   --danger: #8a2e24;
   --shadow: 0 10px 22px rgba(36, 31, 26, 0.12);
+  --book-width: 160px;
   font-family: "Liberation Sans", "Nimbus Sans", sans-serif;
 }
 
@@ -192,6 +193,28 @@ input[type="search"], input[type="text"] {
 
 input[type="search"] { width: 220px; }
 
+.zoom {
+  display: flex;
+  background: var(--sheet);
+  border: 1px solid var(--line);
+}
+
+.zoom button {
+  width: 32px;
+  padding: 8px 0;
+  border: 0;
+  background: transparent;
+  font-size: 16px;
+  line-height: 1;
+}
+
+.zoom button + button { border-left: 1px solid var(--line); }
+
+.zoom button:disabled {
+  color: var(--muted);
+  cursor: default;
+}
+
 #content {
   flex: 1;
   overflow: auto;
@@ -200,17 +223,22 @@ input[type="search"] { width: 220px; }
 
 .grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  grid-template-columns: repeat(auto-fill, var(--book-width));
+  justify-content: start;
   gap: 28px 20px;
 }
 
 .book {
+  width: var(--book-width);
+  min-width: 0;
   margin: 0;
 }
 
 .cover {
   position: relative;
-  height: 240px;
+  width: 100%;
+  aspect-ratio: 2 / 3;
+  overflow: hidden;
   background: var(--sheet);
   box-shadow: var(--shadow);
 }
@@ -228,16 +256,25 @@ input[type="search"] { width: 220px; }
   bottom: 6px;
   background: rgba(36, 31, 26, 0.82);
   color: var(--accent-ink);
-  font-size: 10px;
+  font-size: calc(var(--book-width) * 0.065);
   letter-spacing: 0.04em;
   padding: 2px 5px;
 }
 
 .book-title {
   margin: 8px 0 0;
+  max-width: 100%;
+  height: 2.6em;
+  overflow: hidden;
   font-family: Palatino, "Liberation Serif", Georgia, serif;
-  font-size: 15px;
+  font-size: calc(var(--book-width) * 0.094);
   line-height: 1.3;
+  text-align: start;
+  unicode-bidi: isolate;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow-wrap: anywhere;
 }
 
 .authors, .empty {
@@ -357,24 +394,51 @@ dialog label {
 
 dialog input[type="text"] { width: 100%; box-sizing: border-box; }
 
-.choices {
-  margin: 14px 0 0;
-  padding: 0;
-  border: 0;
+.picker {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: 12px;
 }
 
-.choices legend { padding: 0; font-weight: 400; }
+.picker-button {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  width: 100%;
+  min-width: 0;
+  text-align: left;
+}
 
-.choices label {
+.picker-button:disabled { color: var(--muted); }
+
+.picker-button span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.picker-button::after {
+  content: "▾";
+  color: var(--muted);
+}
+
+.picker-menu {
+  max-height: 160px;
+  overflow: auto;
+  border: 1px solid var(--line);
+  background: var(--sheet);
+  padding: 4px;
+}
+
+.picker-menu label {
   flex-direction: row;
   align-items: center;
   gap: 8px;
-  margin-top: 6px;
-}
-
-.choice-empty {
-  margin: 6px 0 0;
-  color: var(--muted);
+  margin-top: 0;
+  padding: 6px 8px;
 }
 
 #book-status, #confirm-message {
