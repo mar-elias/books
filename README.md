@@ -3,7 +3,7 @@ A Linux app for organizing PDF and EPUB files.
 
 Choose a database folder and a cover thumbnail folder. Book files stay where they are.
 
-The window is a Tauri shell. The shelf itself is HTML. The code is rust.
+The window is a Tauri shell. The shelf itself is HTML. The code is rust/JavaScript.
 
 ![Mar-Elias Books](screenshots/mar-elias-books.png)
 
