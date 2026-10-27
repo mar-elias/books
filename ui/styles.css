@@ -180,7 +180,15 @@ button.icon {
 }
 
 .nav.active, .list-row.active {
-  background: #dfd6c8;
+  background: var(--ink);
+  color: #fff;
+  border-radius: 8px;
+}
+
+.nav.active .count,
+.list-row.active .list-name,
+.list-row.active .list-more {
+  color: #fff;
 }
 
 main {
@@ -366,6 +374,7 @@ input[type="search"] { width: 220px; }
 
 .book-title span {
   padding: 0 3px;
+  border-radius: 0.25em;
   box-decoration-break: clone;
   -webkit-box-decoration-break: clone;
 }
