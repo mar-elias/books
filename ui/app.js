@@ -8,10 +8,7 @@ let search = "";
 let reloadToken = 0;
 let coverVersion = 0;
 let toastTimer = 0;
-let fileGeneration = 0;
 let editingId = null;
-let draftPath = "";
-let draftCover = "";
 
 const libraryNav = document.querySelector("#library-nav");
 const listNav = document.querySelector("#list-nav");
@@ -246,6 +243,7 @@ function bookTile(book) {
   const badge = document.createElement("span");
   badge.className = "badge";
   badge.textContent = book.formatLabel;
+  if (!book.formatLabel) badge.hidden = true;
   const title = document.createElement("p");
   title.className = "book-title";
   title.textContent = book.title;
@@ -355,78 +353,35 @@ async function removeBook(book) {
   }
 }
 
-async function editBook(book) {
-  let cover = "";
-  try {
-    const response = await fetch(coverSrc(book.id));
-    if (response.ok) cover = await bytesToBase64(new Uint8Array(await response.arrayBuffer()));
-  } catch (_error) {
-    cover = "";
-  }
-  openBookDialog(book, cover);
+function editBook(book) {
+  openBookDialog(book);
 }
 
-function openBookDialog(book, cover) {
+function openBookDialog(book) {
   editingId = book ? book.id : null;
-  draftPath = book ? book.filePath : "";
-  draftCover = cover || "";
-  fileGeneration += 1;
   document.querySelector("#book-dialog-title").textContent = book ? "Edit book" : "Add book";
+  document.querySelector("#field-file").value = book ? book.filePath : "";
+  document.querySelector("#field-cover").value = "";
+  document.querySelector("#field-cover").placeholder = book
+    ? "Leave empty to keep this cover"
+    : "Leave empty to use the first page";
   document.querySelector("#field-title").value = book ? book.title : "";
   document.querySelector("#field-author").value = book ? book.author : "";
   document.querySelector("#field-year").value = book && book.year != null ? String(book.year) : "";
   document.querySelector("#field-categories").value = book ? book.categories.join(", ") : "";
   document.querySelector("#field-tags").value = book ? book.tags.join(", ") : "";
-  const fileLabel = document.querySelector("#file-label");
-  fileLabel.textContent = draftPath || "No file chosen";
-  fileLabel.title = draftPath;
   const preview = document.querySelector("#cover-preview");
-  preview.src = draftCover ? `data:image/png;base64,${draftCover}` : "";
+  if (book) {
+    preview.hidden = false;
+    preview.src = coverSrc(book.id);
+    preview.alt = book.title;
+  } else {
+    preview.hidden = true;
+    preview.removeAttribute("src");
+    preview.alt = "";
+  }
   document.querySelector("#book-status").textContent = "";
-  document.querySelector("#book-save").disabled = !draftPath;
   bookDialog.showModal();
-}
-
-async function chooseBookFile() {
-  const path = await invoke("pick_book");
-  if (!path) return;
-  const generation = ++fileGeneration;
-  const status = document.querySelector("#book-status");
-  const save = document.querySelector("#book-save");
-  status.textContent = "Reading the file…";
-  save.disabled = true;
-  try {
-    const inspected = await invoke("inspect_file", { path });
-    if (generation !== fileGeneration) return;
-    draftPath = path;
-    draftCover = inspected.coverPng;
-    document.querySelector("#field-title").value = inspected.title;
-    document.querySelector("#field-author").value = inspected.author;
-    document.querySelector("#field-year").value = inspected.year == null ? "" : String(inspected.year);
-    const fileLabel = document.querySelector("#file-label");
-    fileLabel.textContent = path;
-    fileLabel.title = path;
-    document.querySelector("#cover-preview").src = `data:image/png;base64,${draftCover}`;
-    status.textContent = "";
-  } catch (error) {
-    if (generation !== fileGeneration) return;
-    status.textContent = errorText(error);
-  } finally {
-    if (generation === fileGeneration) save.disabled = !draftPath;
-  }
-}
-
-async function chooseCoverFile() {
-  const path = await invoke("pick_cover");
-  if (!path) return;
-  const status = document.querySelector("#book-status");
-  try {
-    draftCover = await invoke("cover_from_image", { path });
-    document.querySelector("#cover-preview").src = `data:image/png;base64,${draftCover}`;
-    status.textContent = "";
-  } catch (error) {
-    status.textContent = errorText(error);
-  }
 }
 
 async function saveBook(event) {
@@ -438,10 +393,10 @@ async function saveBook(event) {
     title: document.querySelector("#field-title").value,
     author: document.querySelector("#field-author").value,
     year: document.querySelector("#field-year").value,
-    filePath: draftPath,
+    filePath: document.querySelector("#field-file").value,
+    coverPath: document.querySelector("#field-cover").value,
     categories: document.querySelector("#field-categories").value,
     tags: document.querySelector("#field-tags").value,
-    coverPng: draftCover,
   };
   try {
     if (editingId == null) await invoke("add_book", { draft });
@@ -450,17 +405,9 @@ async function saveBook(event) {
     await reload();
   } catch (error) {
     status.textContent = errorText(error);
-    save.disabled = !draftPath;
+  } finally {
+    save.disabled = false;
   }
-}
-
-async function bytesToBase64(bytes) {
-  let binary = "";
-  const chunk = 0x8000;
-  for (let index = 0; index < bytes.length; index += chunk) {
-    binary += String.fromCharCode(...bytes.subarray(index, index + chunk));
-  }
-  return btoa(binary);
 }
 
 function askPrompt(title, confirm, value) {
@@ -552,17 +499,7 @@ function bind() {
       toast(errorText(error));
     }
   });
-  document.querySelector("#add-book").addEventListener("click", () => openBookDialog(null, ""));
-  document.querySelector("#choose-file").addEventListener("click", () => {
-    chooseBookFile().catch((error) => {
-      document.querySelector("#book-status").textContent = errorText(error);
-    });
-  });
-  document.querySelector("#choose-cover").addEventListener("click", () => {
-    chooseCoverFile().catch((error) => {
-      document.querySelector("#book-status").textContent = errorText(error);
-    });
-  });
+  document.querySelector("#add-book").addEventListener("click", () => openBookDialog(null));
   document.querySelector("#book-form").addEventListener("submit", (event) => {
     saveBook(event).catch((error) => {
       document.querySelector("#book-status").textContent = errorText(error);

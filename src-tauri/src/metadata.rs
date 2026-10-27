@@ -36,6 +36,7 @@ impl BookFormat {
 }
 
 #[derive(Debug, Clone)]
+#[allow(dead_code)]
 pub struct Extracted {
     pub title: String,
     pub author: String,

@@ -3,10 +3,8 @@ use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 use std::sync::Mutex;
 
-use base64::Engine;
 use serde::{Deserialize, Serialize};
 use tauri::{Manager, State};
-use tauri_plugin_dialog::DialogExt;
 
 use crate::db::{self, Book, BookList, BookScope, Draft, Library};
 use crate::metadata::{self, BookFormat};
@@ -30,9 +28,9 @@ pub struct BookForm {
     pub author: String,
     pub year: String,
     pub file_path: String,
+    pub cover_path: String,
     pub categories: String,
     pub tags: String,
-    pub cover_png: String,
 }
 
 #[derive(Debug, Serialize)]
@@ -52,16 +50,6 @@ pub struct AuthorRow {
     count: i64,
 }
 
-#[derive(Debug, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct Inspected {
-    title: String,
-    author: String,
-    year: Option<i32>,
-    format: String,
-    cover_png: String,
-}
-
 fn with_library<T>(
     state: &AppState,
     f: impl FnOnce(&Library) -> Result<T, String>,
@@ -71,24 +59,6 @@ fn with_library<T>(
         Ok(library) => f(library),
         Err(err) => Err(err.clone()),
     }
-}
-
-fn encode_png(bytes: &[u8]) -> String {
-    base64::engine::general_purpose::STANDARD.encode(bytes)
-}
-
-fn decode_cover(value: &str) -> Result<Vec<u8>, String> {
-    let value = value.trim();
-    if value.is_empty() {
-        return Ok(Vec::new());
-    }
-    let bytes = base64::engine::general_purpose::STANDARD
-        .decode(value)
-        .map_err(|_| "Could not read that cover".to_string())?;
-    if !bytes.is_empty() && !bytes.starts_with(b"\x89PNG") {
-        return Err("Could not read that cover".to_string());
-    }
-    Ok(bytes)
 }
 
 fn parse_year(value: &str) -> Result<Option<i32>, String> {
@@ -103,41 +73,75 @@ fn parse_year(value: &str) -> Result<Option<i32>, String> {
     }
 }
 
-pub fn form_to_draft(form: BookForm) -> Result<Draft, String> {
-    let path = PathBuf::from(form.file_path.trim());
-    if form.file_path.trim().is_empty() {
-        return Err("Choose a PDF or EPUB file.".to_string());
-    }
-    let Some(format) = BookFormat::from_path(&path) else {
-        return Err("Choose a PDF or EPUB file.".to_string());
-    };
+pub fn form_to_draft(form: BookForm, keep_cover: Option<Vec<u8>>) -> Result<Draft, String> {
     let year = parse_year(&form.year)?;
+    let file_text = form.file_path.trim();
+    let (file_path, format) = if file_text.is_empty() {
+        (String::new(), String::new())
+    } else {
+        let path = PathBuf::from(file_text);
+        let Some(format) = BookFormat::from_path(&path) else {
+            return Err("Book path should be a PDF or EPUB file.".to_string());
+        };
+        if !path.is_file() {
+            return Err("That book file is missing.".to_string());
+        }
+        (
+            path.to_string_lossy().into_owned(),
+            format.as_str().to_string(),
+        )
+    };
     let title = {
         let text = form.title.trim();
-        if text.is_empty() {
-            path.file_stem()
-                .and_then(|stem| stem.to_str())
-                .unwrap_or("Untitled")
-                .to_string()
-        } else {
+        if !text.is_empty() {
             text.to_string()
+        } else if let Some(stem) = Path::new(&file_path)
+            .file_stem()
+            .and_then(|stem| stem.to_str())
+            .filter(|stem| !stem.is_empty())
+        {
+            stem.to_string()
+        } else {
+            "Untitled".to_string()
         }
     };
     let author = form.author.trim().to_string();
-    let mut cover = decode_cover(&form.cover_png)?;
-    if cover.is_empty() {
-        cover = metadata::title_card_png(&title, &author).map_err(|err| err.to_string())?;
-    }
+    let cover = cover_bytes(&form.cover_path, &file_path, &title, &author, keep_cover)?;
     Ok(Draft {
         title,
         author,
         year,
-        file_path: path.to_string_lossy().into_owned(),
-        format: format.as_str().to_string(),
+        file_path,
+        format,
         categories: db::split_names(&form.categories),
         tags: db::split_names(&form.tags),
         cover_png: cover,
     })
+}
+
+fn cover_bytes(
+    cover_path: &str,
+    file_path: &str,
+    title: &str,
+    author: &str,
+    keep_cover: Option<Vec<u8>>,
+) -> Result<Vec<u8>, String> {
+    let cover_path = cover_path.trim();
+    if !cover_path.is_empty() {
+        let bytes =
+            std::fs::read(cover_path).map_err(|_| "Could not read that cover.".to_string())?;
+        return metadata::png_from_bytes(&bytes)
+            .map_err(|_| "Could not read that cover.".to_string());
+    }
+    if let Some(bytes) = keep_cover.filter(|bytes| bytes.starts_with(b"\x89PNG")) {
+        return Ok(bytes);
+    }
+    if !file_path.is_empty() {
+        return metadata::extract(Path::new(file_path))
+            .map(|extracted| extracted.cover_png)
+            .map_err(|_| "Could not read a cover from that book.".to_string());
+    }
+    metadata::title_card_png(title, author).map_err(|err| err.to_string())
 }
 
 #[tauri::command]
@@ -173,11 +177,10 @@ pub fn authors(state: State<AppState>) -> Result<Vec<AuthorRow>, String> {
 
 fn book_card(book: Book) -> BookCard {
     let format_label = match book.format.as_str() {
-        "epub" => BookFormat::Epub,
-        _ => BookFormat::Pdf,
-    }
-    .label()
-    .to_string();
+        "epub" => BookFormat::Epub.label().to_string(),
+        "pdf" => BookFormat::Pdf.label().to_string(),
+        _ => String::new(),
+    };
     let author_label = db::author_label(&book.author);
     BookCard {
         book,
@@ -194,32 +197,8 @@ pub fn lists(state: State<AppState>) -> Result<Vec<BookList>, String> {
 }
 
 #[tauri::command]
-pub fn inspect_file(path: String) -> Result<Inspected, String> {
-    let path = PathBuf::from(path.trim());
-    if !path.is_file() {
-        return Err("Choose a PDF or EPUB file.".to_string());
-    }
-    let extracted = metadata::extract(&path).map_err(|err| err.to_string())?;
-    Ok(Inspected {
-        title: extracted.title,
-        author: extracted.author,
-        year: extracted.year,
-        format: extracted.format.as_str().to_string(),
-        cover_png: encode_png(&extracted.cover_png),
-    })
-}
-
-#[tauri::command]
-pub fn cover_from_image(path: String) -> Result<String, String> {
-    let path = PathBuf::from(path.trim());
-    let bytes = std::fs::read(&path).map_err(|err| err.to_string())?;
-    let png = metadata::png_from_bytes(&bytes).map_err(|err| err.to_string())?;
-    Ok(encode_png(&png))
-}
-
-#[tauri::command]
 pub fn add_book(state: State<AppState>, draft: BookForm) -> Result<Book, String> {
-    let draft = form_to_draft(draft)?;
+    let draft = form_to_draft(draft, None)?;
     with_library(&state, |library| {
         library.add_book(&draft).map_err(|err| err.to_string())
     })
@@ -227,10 +206,25 @@ pub fn add_book(state: State<AppState>, draft: BookForm) -> Result<Book, String>
 
 #[tauri::command]
 pub fn update_book(state: State<AppState>, id: i64, draft: BookForm) -> Result<Book, String> {
-    let draft = form_to_draft(draft)?;
+    let existing = with_library(&state, |library| stored_cover(library, id))?;
+    let draft = form_to_draft(draft, existing)?;
     with_library(&state, |library| {
         library.update_book(id, &draft).map_err(|err| err.to_string())
     })
+}
+
+fn stored_cover(library: &Library, id: i64) -> Result<Option<Vec<u8>>, String> {
+    let book = library
+        .book(id)
+        .map_err(|err| err.to_string())?
+        .ok_or_else(|| "That book is no longer in the library".to_string())?;
+    let Some(path) = book.cover_path else {
+        return Ok(None);
+    };
+    match std::fs::read(path) {
+        Ok(bytes) if bytes.starts_with(b"\x89PNG") => Ok(Some(bytes)),
+        _ => Ok(None),
+    }
 }
 
 #[tauri::command]
@@ -298,6 +292,9 @@ pub fn open_book(state: State<AppState>, id: i64) -> Result<(), String> {
             .map(|book| book.file_path)
             .ok_or_else(|| "That book is no longer in the library".to_string())
     })?;
+    if path.trim().is_empty() {
+        return Err("That book has no file.".to_string());
+    }
     let file = PathBuf::from(&path);
     if !file.exists() {
         return Err("That file is missing".to_string());
@@ -325,48 +322,6 @@ fn spawn_detached(program: &str, path: &Path) -> std::io::Result<()> {
         let _ = child.wait();
     });
     Ok(())
-}
-
-#[tauri::command]
-pub fn pick_book(app: tauri::AppHandle) -> Result<Option<String>, String> {
-    pick_file(
-        &app,
-        "Choose a book",
-        "PDF and EPUB",
-        &["pdf", "epub"],
-    )
-}
-
-#[tauri::command]
-pub fn pick_cover(app: tauri::AppHandle) -> Result<Option<String>, String> {
-    pick_file(&app, "Choose a cover", "Images", &["png", "jpg", "jpeg", "gif"])
-}
-
-fn pick_file(
-    app: &tauri::AppHandle,
-    title: &str,
-    filter_name: &str,
-    extensions: &[&str],
-) -> Result<Option<String>, String> {
-    let (tx, rx) = std::sync::mpsc::channel();
-    let mut dialog = app
-        .dialog()
-        .file()
-        .add_filter(filter_name, extensions)
-        .set_title(title);
-    if let Some(window) = app.get_webview_window("main") {
-        dialog = dialog.set_parent(&window);
-    }
-    dialog.pick_file(move |file| {
-        let _ = tx.send(file);
-    });
-    match rx.recv().map_err(|err| err.to_string())? {
-        Some(path) => path
-            .into_path()
-            .map(|file| Some(file.to_string_lossy().into_owned()))
-            .map_err(|err| err.to_string()),
-        None => Ok(None),
-    }
 }
 
 pub fn cover_response(
@@ -434,37 +389,137 @@ mod tests {
             author: "Ada".to_string(),
             year: year.to_string(),
             file_path: path.to_string(),
+            cover_path: cover.to_string(),
             categories: " Fiction, fiction ,History".to_string(),
             tags: "unread".to_string(),
-            cover_png: cover.to_string(),
         }
+    }
+
+    fn temp_dir() -> PathBuf {
+        let dir = std::env::temp_dir().join(format!(
+            "ebook-reader-form-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        std::fs::create_dir_all(&dir).unwrap();
+        dir
+    }
+
+    fn sample_png() -> Vec<u8> {
+        metadata::title_card_png("Cover", "Ada").unwrap()
     }
 
     #[test]
     fn empty_title_uses_file_stem() {
-        let cover = encode_png(b"\x89PNG\r\n\x1a\n");
-        let draft = form_to_draft(form("  ", "", "/books/kindred.epub", &cover)).unwrap();
+        let dir = temp_dir();
+        let book = dir.join("kindred.epub");
+        let cover = dir.join("cover.png");
+        std::fs::write(&book, b"epub").unwrap();
+        std::fs::write(&cover, sample_png()).unwrap();
+        let draft = form_to_draft(
+            form("  ", "", &book.to_string_lossy(), &cover.to_string_lossy()),
+            None,
+        )
+        .unwrap();
         assert_eq!(draft.title, "kindred");
         assert_eq!(draft.author, "Ada");
         assert_eq!(draft.year, None);
         assert_eq!(draft.format, "epub");
         assert_eq!(draft.categories, vec!["Fiction", "History"]);
         assert_eq!(draft.tags, vec!["unread"]);
+        assert!(draft.cover_png.starts_with(b"\x89PNG"));
+        let _ = std::fs::remove_dir_all(dir);
     }
 
     #[test]
     fn year_must_be_numeric() {
-        let cover = encode_png(b"\x89PNG\r\n\x1a\n");
-        let error = form_to_draft(form("Kindred", "nope", "/books/kindred.epub", &cover)).unwrap_err();
+        let error =
+            form_to_draft(form("Kindred", "nope", "/books/kindred.epub", ""), None).unwrap_err();
         assert_eq!(error, "Year should be a number.");
     }
 
     #[test]
     fn rejects_unsupported_files_and_bad_covers() {
-        let missing = form_to_draft(form("Notes", "", "/books/notes.txt", "")).unwrap_err();
-        assert_eq!(missing, "Choose a PDF or EPUB file.");
-        let cover = form_to_draft(form("Kindred", "", "/books/kindred.epub", "aaaa")).unwrap_err();
-        assert_eq!(cover, "Could not read that cover");
+        let missing = form_to_draft(form("Notes", "", "/books/notes.txt", ""), None).unwrap_err();
+        assert_eq!(missing, "Book path should be a PDF or EPUB file.");
+        let absent =
+            form_to_draft(form("Kindred", "", "/books/kindred.epub", ""), None).unwrap_err();
+        assert_eq!(absent, "That book file is missing.");
+        let dir = temp_dir();
+        let book = dir.join("kindred.epub");
+        std::fs::write(&book, b"epub").unwrap();
+        let cover = form_to_draft(
+            form(
+                "Kindred",
+                "",
+                &book.to_string_lossy(),
+                &dir.join("missing.png").to_string_lossy(),
+            ),
+            None,
+        )
+        .unwrap_err();
+        assert_eq!(cover, "Could not read that cover.");
+        let _ = std::fs::remove_dir_all(dir);
+    }
+
+    #[test]
+    fn entry_without_paths_uses_a_title_card() {
+        let draft = form_to_draft(form("Notes", "", "", ""), None).unwrap();
+        assert_eq!(draft.title, "Notes");
+        assert_eq!(draft.file_path, "");
+        assert_eq!(draft.format, "");
+        assert!(draft.cover_png.starts_with(b"\x89PNG"));
+        let untitled = form_to_draft(form("  ", "", "  ", "  "), None).unwrap();
+        assert_eq!(untitled.title, "Untitled");
+        assert_eq!(untitled.file_path, "");
+    }
+
+    #[test]
+    fn missing_cover_path_uses_the_first_page() {
+        let dir = temp_dir();
+        let book = dir.join("hello.pdf");
+        std::fs::write(&book, minimal_pdf()).unwrap();
+        let draft = form_to_draft(form("", "", &book.to_string_lossy(), ""), None).unwrap();
+        assert_eq!(draft.title, "hello");
+        assert_eq!(draft.format, "pdf");
+        assert!(draft.cover_png.starts_with(b"\x89PNG"));
+        let kept = form_to_draft(
+            form("Hello", "", &book.to_string_lossy(), ""),
+            Some(sample_png()),
+        )
+        .unwrap();
+        assert_eq!(kept.cover_png, sample_png());
+        let _ = std::fs::remove_dir_all(dir);
+    }
+
+    fn minimal_pdf() -> Vec<u8> {
+        let objects = [
+            b"1 0 obj<</Type/Catalog/Pages 2 0 R>>endobj\n".to_vec(),
+            b"2 0 obj<</Type/Pages/Count 1/Kids[3 0 R]>>endobj\n".to_vec(),
+            b"3 0 obj<</Type/Page/Parent 2 0 R/MediaBox[0 0 300 400]/Contents 4 0 R/Resources<</Font<</F1 5 0 R>>>>>>endobj\n".to_vec(),
+            b"4 0 obj<</Length 44>>stream\nBT /F1 24 Tf 40 200 Td (Hello) Tj ET\nendstream\nendobj\n".to_vec(),
+            b"5 0 obj<</Type/Font/Subtype/Type1/BaseFont/Helvetica>>endobj\n".to_vec(),
+        ];
+        let mut body = b"%PDF-1.4\n".to_vec();
+        let mut offsets = Vec::new();
+        for object in &objects {
+            offsets.push(body.len());
+            body.extend_from_slice(object);
+        }
+        let xref_at = body.len();
+        let mut xref = format!("xref\n0 {}\n0000000000 65535 f \n", objects.len() + 1);
+        for offset in offsets {
+            xref.push_str(&format!("{offset:010} 00000 n \n"));
+        }
+        xref.push_str(&format!(
+            "trailer<</Size {}/Root 1 0 R>>\nstartxref\n{xref_at}\n%%EOF\n",
+            objects.len() + 1
+        ));
+        body.extend(xref.as_bytes());
+        body
     }
 
     #[test]

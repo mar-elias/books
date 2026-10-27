@@ -12,3 +12,19 @@ A small icon to the bottom right of a book cover should show if it's a pdf or an
 
 Use Tauri + HTML/CSS
 
+***
+
+The add book dialog should not open a window to browse files
+
+Instead: It should ask for 2 paths: One for the book; and another for the cover.
+
+If the cover path isn't supplied, it is gotten from the first page.
+
+It is possible to add a book entry without a book path or a cover path.
+
+***
+
+The side panel should have 2 more sections: One is "Categories" another is "Tags" each one to browse all existing categories and tags across all books.
+
+
+

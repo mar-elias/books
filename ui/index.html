@@ -35,21 +35,18 @@
     <dialog id="book-dialog">
       <form id="book-form">
         <h2 id="book-dialog-title">Add book</h2>
-        <div class="file-row">
-          <button id="choose-file" type="button">Choose file</button>
-          <p id="file-label" title="">No file chosen</p>
-        </div>
+        <label>Book <input id="field-file" type="text" spellcheck="false" /></label>
+        <label>Cover <input id="field-cover" type="text" spellcheck="false" /></label>
         <label>Title <input id="field-title" type="text" /></label>
         <label>Author <input id="field-author" type="text" /></label>
         <label>Year <input id="field-year" type="text" inputmode="numeric" /></label>
         <label>Categories <input id="field-categories" type="text" placeholder="Fiction, History" /></label>
         <label>Tags <input id="field-tags" type="text" placeholder="unread, favorite" /></label>
-        <img id="cover-preview" alt="" />
-        <button id="choose-cover" type="button">Choose cover</button>
+        <img id="cover-preview" alt="" hidden />
         <p id="book-status"></p>
         <div class="dialog-actions">
           <button id="book-cancel" type="button">Cancel</button>
-          <button id="book-save" class="primary" type="submit" disabled>Save</button>
+          <button id="book-save" class="primary" type="submit">Save</button>
         </div>
       </form>
     </dialog>

@@ -3,8 +3,6 @@
   "description": "Main window",
   "windows": ["main"],
   "permissions": [
-    "core:default",
-    "dialog:default",
-    "dialog:allow-open"
+    "core:default"
   ]
 }

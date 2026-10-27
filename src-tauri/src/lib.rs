@@ -6,7 +6,6 @@ use tauri::Manager;
 
 pub fn run() {
     tauri::Builder::default()
-        .plugin(tauri_plugin_dialog::init())
         .register_uri_scheme_protocol("cover", |ctx, request| {
             commands::cover_response(&ctx, request)
         })
@@ -21,8 +20,6 @@ pub fn run() {
             commands::books,
             commands::authors,
             commands::lists,
-            commands::inspect_file,
-            commands::cover_from_image,
             commands::add_book,
             commands::update_book,
             commands::delete_book,
@@ -31,9 +28,7 @@ pub fn run() {
             commands::delete_list,
             commands::add_book_to_list,
             commands::remove_book_from_list,
-            commands::open_book,
-            commands::pick_book,
-            commands::pick_cover
+            commands::open_book
         ])
         .run(tauri::generate_context!())
         .expect("error while running Books");

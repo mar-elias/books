@@ -120,8 +120,8 @@ impl Library {
                 draft.title,
                 draft.author,
                 draft.year,
-                draft.file_path,
-                draft.format
+                none_if_empty(&draft.file_path),
+                none_if_empty(&draft.format)
             ],
         );
         if let Err(err) = insert {
@@ -149,8 +149,8 @@ impl Library {
                 draft.title,
                 draft.author,
                 draft.year,
-                draft.file_path,
-                draft.format,
+                none_if_empty(&draft.file_path),
+                none_if_empty(&draft.format),
                 id
             ],
         );
@@ -348,8 +348,8 @@ impl Library {
                  title TEXT NOT NULL,
                  author TEXT NOT NULL DEFAULT '',
                  year INTEGER,
-                 file_path TEXT NOT NULL UNIQUE,
-                 format TEXT NOT NULL CHECK (format IN ('pdf', 'epub')),
+                 file_path TEXT UNIQUE,
+                 format TEXT CHECK (format IS NULL OR format IN ('pdf', 'epub')),
                  cover_path TEXT
              );
              CREATE TABLE IF NOT EXISTS categories (
@@ -384,6 +384,46 @@ impl Library {
              CREATE INDEX IF NOT EXISTS books_author ON books(author);
              CREATE INDEX IF NOT EXISTS books_title ON books(title);",
         )?;
+        self.allow_books_without_files()?;
+        Ok(())
+    }
+
+    fn allow_books_without_files(&self) -> Result<(), DbError> {
+        let sql: Option<String> = self
+            .conn
+            .query_row(
+                "SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'books'",
+                [],
+                |row| row.get(0),
+            )
+            .optional()?;
+        let Some(sql) = sql else {
+            return Ok(());
+        };
+        if !sql.contains("file_path TEXT NOT NULL") {
+            return Ok(());
+        }
+        self.conn.execute("PRAGMA foreign_keys = OFF", [])?;
+        self.conn.execute_batch(
+            "BEGIN;
+             CREATE TABLE books_next (
+                 id INTEGER PRIMARY KEY,
+                 title TEXT NOT NULL,
+                 author TEXT NOT NULL DEFAULT '',
+                 year INTEGER,
+                 file_path TEXT UNIQUE,
+                 format TEXT CHECK (format IS NULL OR format IN ('pdf', 'epub')),
+                 cover_path TEXT
+             );
+             INSERT INTO books_next (id, title, author, year, file_path, format, cover_path)
+             SELECT id, title, author, year, file_path, format, cover_path FROM books;
+             DROP TABLE books;
+             ALTER TABLE books_next RENAME TO books;
+             CREATE INDEX IF NOT EXISTS books_author ON books(author);
+             CREATE INDEX IF NOT EXISTS books_title ON books(title);
+             COMMIT;",
+        )?;
+        self.conn.execute("PRAGMA foreign_keys = ON", [])?;
         Ok(())
     }
 
@@ -497,14 +537,18 @@ fn map_unique(err: rusqlite::Error, kind: UniqueKind) -> DbError {
     }
 }
 
+fn none_if_empty(value: &str) -> Option<&str> {
+    if value.is_empty() { None } else { Some(value) }
+}
+
 fn map_book_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<Book> {
     Ok(Book {
         id: row.get(0)?,
         title: row.get(1)?,
         author: row.get(2)?,
         year: row.get(3)?,
-        file_path: row.get(4)?,
-        format: row.get(5)?,
+        file_path: row.get::<_, Option<String>>(4)?.unwrap_or_default(),
+        format: row.get::<_, Option<String>>(5)?.unwrap_or_default(),
         cover_path: row.get(6)?,
         categories: Vec::new(),
         tags: Vec::new(),
@@ -565,6 +609,12 @@ mod tests {
             .duration_since(UNIX_EPOCH)
             .unwrap()
             .as_nanos() as u64
+    }
+
+    fn pathless(title: &str) -> Draft {
+        let mut item = draft(title, "", "");
+        item.format.clear();
+        item
     }
 
     fn draft(title: &str, author: &str, path: &str) -> Draft {
@@ -629,6 +679,57 @@ mod tests {
         assert!(!dir.join("covers").join(format!("{}.png", first.id)).exists());
 
         let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn books_without_files_are_allowed() {
+        let (library, dir) = temp_library();
+        let first = library.add_book(&pathless("Notes")).unwrap();
+        let second = library.add_book(&pathless("More notes")).unwrap();
+        assert_eq!(first.file_path, "");
+        assert_eq!(first.format, "");
+        assert_eq!(second.file_path, "");
+        let books = library.books(&BookScope::All).unwrap();
+        assert_eq!(books.len(), 2);
+        let _ = fs::remove_dir_all(dir);
+    }
+
+    #[test]
+    fn old_catalogs_keep_books_when_paths_become_optional() {
+        let dir = std::env::temp_dir().join(format!(
+            "ebook-reader-migrate-{}-{}",
+            std::process::id(),
+            unique_suffix()
+        ));
+        let _ = fs::remove_dir_all(&dir);
+        fs::create_dir_all(&dir).unwrap();
+        let db_path = dir.join("library.db");
+        {
+            let conn = Connection::open(&db_path).unwrap();
+            conn.execute_batch(
+                "CREATE TABLE books (
+                     id INTEGER PRIMARY KEY,
+                     title TEXT NOT NULL,
+                     author TEXT NOT NULL DEFAULT '',
+                     year INTEGER,
+                     file_path TEXT NOT NULL UNIQUE,
+                     format TEXT NOT NULL CHECK (format IN ('pdf', 'epub')),
+                     cover_path TEXT
+                 );
+                 INSERT INTO books (title, author, year, file_path, format)
+                 VALUES ('Dune', 'Frank Herbert', 1965, '/books/dune.epub', 'epub');",
+            )
+            .unwrap();
+        }
+        let library = Library::open(&db_path, &dir.join("covers")).unwrap();
+        let books = library.books(&BookScope::All).unwrap();
+        assert_eq!(books.len(), 1);
+        assert_eq!(books[0].title, "Dune");
+        assert_eq!(books[0].file_path, "/books/dune.epub");
+        library.add_book(&pathless("Notes")).unwrap();
+        library.add_book(&pathless("More")).unwrap();
+        assert_eq!(library.books(&BookScope::All).unwrap().len(), 3);
+        let _ = fs::remove_dir_all(dir);
     }
 
     #[test]

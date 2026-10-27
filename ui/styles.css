@@ -308,7 +308,9 @@ dialog label {
   margin-top: 12px;
 }
 
-#file-label, #book-status, #confirm-message {
+dialog input[type="text"] { width: 100%; box-sizing: border-box; }
+
+#book-status, #confirm-message {
   margin: 8px 0 0;
   color: var(--muted);
   overflow: hidden;
@@ -324,8 +326,6 @@ dialog label {
   background: var(--sheet);
   box-shadow: var(--shadow);
 }
-
-#choose-cover { margin-top: 10px; }
 
 .dialog-actions {
   display: flex;
