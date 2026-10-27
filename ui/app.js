@@ -189,13 +189,34 @@ function scopePayload() {
   return { kind: "all" };
 }
 
-function headingText() {
-  if (viewState.kind === "authors") return "Authors";
-  if (viewState.kind === "author") return viewState.label;
-  if (viewState.kind === "category" || viewState.kind === "tag" || viewState.kind === "list") {
-    return viewState.name;
+function renderHeading() {
+  const trail = headingTrail();
+  heading.replaceChildren();
+  if (!trail.section) {
+    heading.textContent = trail.name;
+    return;
   }
-  return "All books";
+  const section = document.createElement("span");
+  section.className = "crumb";
+  section.textContent = trail.section;
+  const separator = document.createElement("span");
+  separator.className = "crumb-sep";
+  separator.setAttribute("aria-hidden", "true");
+  separator.textContent = ">";
+  const current = document.createElement("span");
+  current.className = "crumb-current";
+  current.dir = "auto";
+  current.textContent = trail.name;
+  heading.append(section, separator, current);
+}
+
+function headingTrail() {
+  if (viewState.kind === "authors") return { name: "Authors" };
+  if (viewState.kind === "author") return { section: "Authors", name: viewState.label };
+  if (viewState.kind === "category") return { section: "Categories", name: viewState.name };
+  if (viewState.kind === "tag") return { section: "Tags", name: viewState.name };
+  if (viewState.kind === "list") return { section: "Lists", name: viewState.name };
+  return { name: "All books" };
 }
 
 async function reload() {
@@ -231,7 +252,7 @@ async function reload() {
 }
 
 function render() {
-  heading.textContent = headingText();
+  renderHeading();
   backButton.hidden = viewState.kind !== "author";
   renderLibrary();
   renderNameNav(categoryNav, categories, "category");
