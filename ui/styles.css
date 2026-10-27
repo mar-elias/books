@@ -153,8 +153,6 @@ button.icon {
   background: #dfd6c8;
 }
 
-#new-list { margin-top: 6px; }
-
 main {
   flex: 1;
   min-width: 0;
