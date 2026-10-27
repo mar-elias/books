@@ -12,9 +12,15 @@
         <p class="app-name">Books</p>
         <p class="section">Library</p>
         <nav id="library-nav" aria-label="Library"></nav>
-        <p class="section">Categories</p>
+        <div class="section-row">
+          <p class="section">Categories</p>
+          <button id="new-category" class="text icon" type="button" aria-label="Add category">+</button>
+        </div>
         <nav id="category-nav" aria-label="Categories"></nav>
-        <p class="section">Tags</p>
+        <div class="section-row">
+          <p class="section">Tags</p>
+          <button id="new-tag" class="text icon" type="button" aria-label="Add tag">+</button>
+        </div>
         <nav id="tag-nav" aria-label="Tags"></nav>
         <p class="section">Lists</p>
         <div id="list-nav"></div>
@@ -44,14 +50,21 @@
         <label>Title <input id="field-title" type="text" /></label>
         <label>Author <input id="field-author" type="text" /></label>
         <label>Year <input id="field-year" type="text" inputmode="numeric" /></label>
-        <label>Categories <input id="field-categories" type="text" placeholder="Fiction, History" /></label>
-        <label>Tags <input id="field-tags" type="text" placeholder="unread, favorite" /></label>
+        <fieldset class="choices">
+          <legend>Categories</legend>
+          <div id="category-choices"></div>
+        </fieldset>
+        <fieldset class="choices">
+          <legend>Tags</legend>
+          <div id="tag-choices"></div>
+        </fieldset>
         <img id="cover-preview" alt="" hidden />
         <p id="book-status"></p>
         <div class="dialog-actions">
           <button id="book-cancel" type="button">Cancel</button>
           <button id="book-save" class="primary" type="submit">Save</button>
         </div>
+        <button id="book-delete" class="danger" type="button" hidden>Delete book</button>
       </form>
     </dialog>
 

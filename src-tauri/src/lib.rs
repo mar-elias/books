@@ -25,6 +25,8 @@ pub fn run() {
             commands::add_book,
             commands::update_book,
             commands::delete_book,
+            commands::create_category,
+            commands::create_tag,
             commands::create_list,
             commands::rename_list,
             commands::delete_list,

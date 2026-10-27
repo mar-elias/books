@@ -67,6 +67,8 @@ pub enum DbError {
     Io(std::io::Error),
     DuplicateFile,
     DuplicateList,
+    DuplicateCategory,
+    DuplicateTag,
     NotFound,
 }
 
@@ -77,6 +79,8 @@ impl std::fmt::Display for DbError {
             Self::Io(err) => write!(f, "{err}"),
             Self::DuplicateFile => write!(f, "That file is already in the library"),
             Self::DuplicateList => write!(f, "A list with that name already exists"),
+            Self::DuplicateCategory => write!(f, "A category with that name already exists"),
+            Self::DuplicateTag => write!(f, "A tag with that name already exists"),
             Self::NotFound => write!(f, "That book is no longer in the library"),
         }
     }
@@ -305,19 +309,38 @@ impl Library {
         self.name_counts(NameKind::Tag)
     }
 
+    pub fn create_category(&self, name: &str) -> Result<(), DbError> {
+        self.insert_catalog_name(
+            "INSERT INTO categories (name) VALUES (?1)",
+            name,
+            UniqueKind::Category,
+        )
+    }
+
+    pub fn create_tag(&self, name: &str) -> Result<(), DbError> {
+        self.insert_catalog_name("INSERT INTO tags (name) VALUES (?1)", name, UniqueKind::Tag)
+    }
+
+    fn insert_catalog_name(&self, sql: &str, name: &str, kind: UniqueKind) -> Result<(), DbError> {
+        match self.conn.execute(sql, params![name]) {
+            Ok(_) => Ok(()),
+            Err(err) => Err(map_unique(err, kind)),
+        }
+    }
+
     fn name_counts(&self, kind: NameKind) -> Result<Vec<NameCount>, DbError> {
         let sql = match kind {
             NameKind::Category => {
-                "SELECT c.name, COUNT(*)
+                "SELECT c.name, COUNT(bc.book_id)
                  FROM categories c
-                 JOIN book_categories bc ON bc.category_id = c.id
+                 LEFT JOIN book_categories bc ON bc.category_id = c.id
                  GROUP BY c.id
                  ORDER BY c.name COLLATE NOCASE"
             }
             NameKind::Tag => {
-                "SELECT t.name, COUNT(*)
+                "SELECT t.name, COUNT(bt.book_id)
                  FROM tags t
-                 JOIN book_tags bt ON bt.tag_id = t.id
+                 LEFT JOIN book_tags bt ON bt.tag_id = t.id
                  GROUP BY t.id
                  ORDER BY t.name COLLATE NOCASE"
             }
@@ -593,6 +616,8 @@ enum NameKind {
 enum UniqueKind {
     File,
     List,
+    Category,
+    Tag,
 }
 
 fn map_unique(err: rusqlite::Error, kind: UniqueKind) -> DbError {
@@ -601,6 +626,8 @@ fn map_unique(err: rusqlite::Error, kind: UniqueKind) -> DbError {
         match kind {
             UniqueKind::File => DbError::DuplicateFile,
             UniqueKind::List => DbError::DuplicateList,
+            UniqueKind::Category => DbError::DuplicateCategory,
+            UniqueKind::Tag => DbError::DuplicateTag,
         }
     } else {
         DbError::Sqlite(err)
@@ -631,21 +658,18 @@ fn replace_names(
     names: &[String],
     kind: NameKind,
 ) -> Result<(), DbError> {
-    let (link_delete, insert_name, link_insert, orphan_delete) = match kind {
+    let (link_delete, insert_name, link_insert) = match kind {
         NameKind::Category => (
             "DELETE FROM book_categories WHERE book_id = ?1",
             "INSERT INTO categories (name) VALUES (?1) ON CONFLICT(name) DO NOTHING",
             "INSERT INTO book_categories (book_id, category_id)
              SELECT ?1, id FROM categories WHERE name = ?2 COLLATE NOCASE",
-            "DELETE FROM categories
-             WHERE id NOT IN (SELECT category_id FROM book_categories)",
         ),
         NameKind::Tag => (
             "DELETE FROM book_tags WHERE book_id = ?1",
             "INSERT INTO tags (name) VALUES (?1) ON CONFLICT(name) DO NOTHING",
             "INSERT INTO book_tags (book_id, tag_id)
              SELECT ?1, id FROM tags WHERE name = ?2 COLLATE NOCASE",
-            "DELETE FROM tags WHERE id NOT IN (SELECT tag_id FROM book_tags)",
         ),
     };
     conn.execute(link_delete, params![book_id])?;
@@ -653,7 +677,6 @@ fn replace_names(
         conn.execute(insert_name, params![name])?;
         conn.execute(link_insert, params![book_id, name])?;
     }
-    conn.execute(orphan_delete, [])?;
     Ok(())
 }
 
@@ -818,6 +841,37 @@ mod tests {
         library.add_book(&pathless("Notes")).unwrap();
         library.add_book(&pathless("More")).unwrap();
         assert_eq!(library.books(&BookScope::All).unwrap().len(), 3);
+        let _ = fs::remove_dir_all(dir);
+    }
+
+    #[test]
+    fn categories_and_tags_can_exist_without_books() {
+        let (library, dir) = temp_library();
+        library.create_category("History").unwrap();
+        library.create_tag("favorite").unwrap();
+        assert!(matches!(
+            library.create_category("history"),
+            Err(DbError::DuplicateCategory)
+        ));
+        assert!(matches!(
+            library.create_tag("Favorite"),
+            Err(DbError::DuplicateTag)
+        ));
+        assert_eq!(library.categories().unwrap()[0].count, 0);
+        assert_eq!(library.tags().unwrap()[0].count, 0);
+
+        let mut item = draft("Dune", "Frank Herbert", "/books/dune.epub");
+        item.categories = vec!["History".to_string()];
+        item.tags = vec!["favorite".to_string()];
+        let book = library.add_book(&item).unwrap();
+        assert_eq!(library.categories().unwrap()[0].count, 1);
+
+        item.categories.clear();
+        item.tags.clear();
+        library.update_book(book.id, &item).unwrap();
+        assert_eq!(library.categories().unwrap()[0].name, "History");
+        assert_eq!(library.categories().unwrap()[0].count, 0);
+        assert_eq!(library.tags().unwrap()[0].count, 0);
         let _ = fs::remove_dir_all(dir);
     }
 

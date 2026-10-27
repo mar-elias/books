@@ -1,5 +1,3 @@
-const BOOK_DRAG = "application/x-book-id";
-
 const viewState = { kind: "all" };
 let books = [];
 let authors = [];
@@ -11,6 +9,7 @@ let reloadToken = 0;
 let coverVersion = 0;
 let toastTimer = 0;
 let editingId = null;
+let editingTitle = "";
 
 const libraryNav = document.querySelector("#library-nav");
 const categoryNav = document.querySelector("#category-nav");
@@ -57,16 +56,11 @@ function hideMenu() {
 function showMenu(x, y, items) {
   menu.replaceChildren();
   for (const item of items) {
-    const button = document.createElement("button");
-    button.type = "button";
-    button.textContent = item.label;
-    button.setAttribute("role", "menuitem");
-    if (item.danger) button.className = "danger";
-    button.addEventListener("click", () => {
-      hideMenu();
-      item.onSelect();
-    });
-    menu.append(button);
+    if (item.children) {
+      menu.append(submenuItem(item));
+      continue;
+    }
+    menu.append(menuButton(item));
   }
   menu.hidden = false;
   menu.style.left = "0px";
@@ -76,6 +70,54 @@ function showMenu(x, y, items) {
   const top = Math.min(y, window.innerHeight - rect.height - 8);
   menu.style.left = `${Math.max(8, left)}px`;
   menu.style.top = `${Math.max(8, top)}px`;
+}
+
+function menuButton(item) {
+  const button = document.createElement("button");
+  button.type = "button";
+  button.textContent = item.label;
+  button.setAttribute("role", "menuitem");
+  if (item.danger) button.className = "danger";
+  if (item.disabled) {
+    button.disabled = true;
+    return button;
+  }
+  button.addEventListener("click", () => {
+    hideMenu();
+    item.onSelect();
+  });
+  return button;
+}
+
+function submenuItem(item) {
+  const wrap = document.createElement("div");
+  wrap.className = "menu-item";
+  const button = document.createElement("button");
+  button.type = "button";
+  button.textContent = item.label;
+  button.setAttribute("role", "menuitem");
+  button.setAttribute("aria-haspopup", "menu");
+  const submenu = document.createElement("div");
+  submenu.className = "submenu";
+  submenu.hidden = true;
+  submenu.setAttribute("role", "menu");
+  for (const child of item.children) submenu.append(menuButton(child));
+  const open = () => {
+    submenu.hidden = false;
+    const rect = submenu.getBoundingClientRect();
+    submenu.classList.toggle("flip", rect.right > window.innerWidth - 8);
+  };
+  wrap.addEventListener("mouseenter", open);
+  wrap.addEventListener("mouseleave", () => {
+    submenu.hidden = true;
+  });
+  button.addEventListener("click", (event) => {
+    event.stopPropagation();
+    if (submenu.hidden) open();
+    else submenu.hidden = true;
+  });
+  wrap.append(button, submenu);
+  return wrap;
 }
 
 function coverSrc(id) {
@@ -221,33 +263,11 @@ function renderLists() {
       ]);
     });
     row.append(name, more);
-    row.addEventListener("dragover", (event) => {
-      if (!isBookDrag(event)) return;
-      event.preventDefault();
-      row.classList.add("drop");
-    });
-    row.addEventListener("dragleave", () => row.classList.remove("drop"));
-    row.addEventListener("drop", (event) => {
-      row.classList.remove("drop");
-      event.preventDefault();
-      const bookId = droppedBookId(event);
-      if (bookId) dropOnList(list, bookId);
-    });
     listNav.append(row);
   }
 }
 
-function isBookDrag(event) {
-  return Array.from(event.dataTransfer.types).includes(BOOK_DRAG);
-}
-
-function droppedBookId(event) {
-  const raw = event.dataTransfer.getData(BOOK_DRAG) || event.dataTransfer.getData("text/plain");
-  const bookId = Number(raw);
-  return Number.isInteger(bookId) && bookId > 0 ? bookId : 0;
-}
-
-async function dropOnList(list, bookId) {
+async function addBookToList(list, bookId) {
   try {
     const added = await invoke("add_book_to_list", { listId: list.id, bookId });
     toast(added ? `Added to ${list.name}` : `Already in ${list.name}`);
@@ -279,12 +299,10 @@ function bookMatches(book, needle) {
 function bookTile(book) {
   const article = document.createElement("article");
   article.className = "book";
-  article.draggable = true;
   article.title = `${book.title}\n${book.authorLabel}`;
   const frame = document.createElement("div");
   frame.className = "cover";
   const image = document.createElement("img");
-  image.draggable = false;
   image.alt = book.title;
   image.src = coverSrc(book.id);
   const badge = document.createElement("span");
@@ -296,22 +314,23 @@ function bookTile(book) {
   title.textContent = book.title;
   frame.append(image, badge);
   article.append(frame, title);
-  article.addEventListener("dragstart", (event) => {
-    event.dataTransfer.setData(BOOK_DRAG, String(book.id));
-    event.dataTransfer.setData("text/plain", String(book.id));
-    event.dataTransfer.effectAllowed = "copy";
-  });
   article.addEventListener("dblclick", () => openBook(book.id));
   article.addEventListener("contextmenu", (event) => {
     event.preventDefault();
+    const listItems = lists.length
+      ? lists.map((list) => ({
+          label: list.name,
+          onSelect: () => addBookToList(list, book.id),
+        }))
+      : [{ label: "No lists", disabled: true }];
     const items = [
       { label: "Open", onSelect: () => openBook(book.id) },
       { label: "Edit", onSelect: () => editBook(book) },
+      { label: "Add to list", children: listItems },
     ];
     if (viewState.kind === "list") {
       items.push({ label: "Remove from list", onSelect: () => removeFromList(book.id) });
     }
-    items.push({ label: "Remove from library", danger: true, onSelect: () => removeBook(book) });
     showMenu(event.clientX, event.clientY, items);
   });
   return article;
@@ -391,12 +410,14 @@ async function removeBook(book) {
     `${book.title} will leave the library. The file on disk stays where it is.`,
     "Remove",
   );
-  if (!confirmed) return;
+  if (!confirmed) return false;
   try {
     await invoke("delete_book", { id: book.id });
     await reload();
+    return true;
   } catch (error) {
     toast(errorText(error));
+    return false;
   }
 }
 
@@ -406,7 +427,9 @@ function editBook(book) {
 
 function openBookDialog(book) {
   editingId = book ? book.id : null;
+  editingTitle = book ? book.title : "";
   document.querySelector("#book-dialog-title").textContent = book ? "Edit book" : "Add book";
+  document.querySelector("#book-delete").hidden = !book;
   document.querySelector("#field-file").value = book ? book.filePath : "";
   document.querySelector("#field-cover").value = "";
   document.querySelector("#field-cover").placeholder = book
@@ -415,8 +438,12 @@ function openBookDialog(book) {
   document.querySelector("#field-title").value = book ? book.title : "";
   document.querySelector("#field-author").value = book ? book.author : "";
   document.querySelector("#field-year").value = book && book.year != null ? String(book.year) : "";
-  document.querySelector("#field-categories").value = book ? book.categories.join(", ") : "";
-  document.querySelector("#field-tags").value = book ? book.tags.join(", ") : "";
+  renderChoices(
+    document.querySelector("#category-choices"),
+    categories,
+    book ? book.categories : [],
+  );
+  renderChoices(document.querySelector("#tag-choices"), tags, book ? book.tags : []);
   const preview = document.querySelector("#cover-preview");
   if (book) {
     preview.hidden = false;
@@ -442,8 +469,8 @@ async function saveBook(event) {
     year: document.querySelector("#field-year").value,
     filePath: document.querySelector("#field-file").value,
     coverPath: document.querySelector("#field-cover").value,
-    categories: document.querySelector("#field-categories").value,
-    tags: document.querySelector("#field-tags").value,
+    categories: chosenNames(document.querySelector("#category-choices")),
+    tags: chosenNames(document.querySelector("#tag-choices")),
   };
   try {
     if (editingId == null) await invoke("add_book", { draft });
@@ -455,6 +482,31 @@ async function saveBook(event) {
   } finally {
     save.disabled = false;
   }
+}
+
+function renderChoices(container, items, selected) {
+  container.replaceChildren();
+  if (items.length === 0) {
+    const note = document.createElement("p");
+    note.className = "choice-empty";
+    note.textContent = "Add one with + in the sidebar.";
+    container.append(note);
+    return;
+  }
+  const chosen = new Set(selected.map((name) => name.toLowerCase()));
+  for (const item of items) {
+    const label = document.createElement("label");
+    const input = document.createElement("input");
+    input.type = "checkbox";
+    input.value = item.name;
+    input.checked = chosen.has(item.name.toLowerCase());
+    label.append(input, document.createTextNode(item.name));
+    container.append(label);
+  }
+}
+
+function chosenNames(container) {
+  return [...container.querySelectorAll("input:checked")].map((input) => input.value).join(", ");
 }
 
 function askPrompt(title, confirm, value) {
@@ -504,6 +556,17 @@ function askConfirm(title, message, confirm) {
   });
 }
 
+async function addCatalogName(title, confirm, command) {
+  const name = await askPrompt(title, confirm, "");
+  if (name == null) return;
+  try {
+    await invoke(command, { name });
+    await reload();
+  } catch (error) {
+    toast(errorText(error));
+  }
+}
+
 async function renameList(list) {
   const name = await askPrompt("Rename list", "Rename", list.name);
   if (name == null) return;
@@ -546,6 +609,12 @@ function bind() {
       toast(errorText(error));
     }
   });
+  document.querySelector("#new-category").addEventListener("click", () => {
+    addCatalogName("New category", "Add", "create_category");
+  });
+  document.querySelector("#new-tag").addEventListener("click", () => {
+    addCatalogName("New tag", "Add", "create_tag");
+  });
   document.querySelector("#add-book").addEventListener("click", () => openBookDialog(null));
   document.querySelector("#book-form").addEventListener("submit", (event) => {
     saveBook(event).catch((error) => {
@@ -553,6 +622,12 @@ function bind() {
     });
   });
   document.querySelector("#book-cancel").addEventListener("click", () => bookDialog.close());
+  document.querySelector("#book-delete").addEventListener("click", () => {
+    const title = document.querySelector("#field-title").value.trim() || editingTitle || "This book";
+    removeBook({ id: editingId, title }).then((removed) => {
+      if (removed) bookDialog.close();
+    });
+  });
   document.querySelector("#prompt-cancel").addEventListener("click", () => promptDialog.close());
   document.querySelector("#confirm-cancel").addEventListener("click", () => confirmDialog.close());
   backButton.addEventListener("click", () => {

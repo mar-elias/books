@@ -89,6 +89,22 @@ aside {
   text-transform: uppercase;
 }
 
+.section-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin: 10px 4px 6px 0;
+}
+
+.section-row .section { margin: 0 0 0 12px; }
+
+button.icon {
+  width: 28px;
+  padding: 0;
+  font-size: 18px;
+  line-height: 1;
+}
+
 #library-nav, #category-nav, #tag-nav, #list-nav {
   display: flex;
   flex-direction: column;
@@ -132,7 +148,7 @@ aside {
   color: var(--muted);
 }
 
-.nav.active, .list-row.active, .list-row.drop {
+.nav.active, .list-row.active {
   background: #dfd6c8;
 }
 
@@ -190,7 +206,6 @@ input[type="search"] { width: 220px; }
 
 .book {
   margin: 0;
-  cursor: grab;
 }
 
 .cover {
@@ -275,6 +290,30 @@ input[type="search"] { width: 220px; }
   border: 0;
 }
 
+#menu button:disabled {
+  color: var(--muted);
+}
+
+#menu .menu-item {
+  position: relative;
+}
+
+#menu .submenu {
+  position: absolute;
+  left: calc(100% - 4px);
+  top: 0;
+  min-width: 160px;
+  padding: 4px;
+  background: var(--sheet);
+  border: 1px solid var(--line);
+  box-shadow: var(--shadow);
+}
+
+#menu .submenu.flip {
+  left: auto;
+  right: calc(100% - 4px);
+}
+
 #toast {
   position: fixed;
   z-index: 6;
@@ -318,6 +357,26 @@ dialog label {
 
 dialog input[type="text"] { width: 100%; box-sizing: border-box; }
 
+.choices {
+  margin: 14px 0 0;
+  padding: 0;
+  border: 0;
+}
+
+.choices legend { padding: 0; font-weight: 400; }
+
+.choices label {
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+  margin-top: 6px;
+}
+
+.choice-empty {
+  margin: 6px 0 0;
+  color: var(--muted);
+}
+
 #book-status, #confirm-message {
   margin: 8px 0 0;
   color: var(--muted);
@@ -340,4 +399,9 @@ dialog input[type="text"] { width: 100%; box-sizing: border-box; }
   justify-content: flex-end;
   gap: 8px;
   margin-top: 16px;
+}
+
+#book-delete {
+  width: 100%;
+  margin-top: 8px;
 }

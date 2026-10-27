@@ -253,6 +253,33 @@ pub fn delete_book(state: State<AppState>, id: i64) -> Result<(), String> {
 }
 
 #[tauri::command]
+pub fn create_category(state: State<AppState>, name: String) -> Result<(), String> {
+    create_catalog_name(&state, name, "Enter a category name.", |library, name| {
+        library.create_category(name)
+    })
+}
+
+#[tauri::command]
+pub fn create_tag(state: State<AppState>, name: String) -> Result<(), String> {
+    create_catalog_name(&state, name, "Enter a tag name.", |library, name| {
+        library.create_tag(name)
+    })
+}
+
+fn create_catalog_name(
+    state: &AppState,
+    name: String,
+    empty: &str,
+    insert: impl FnOnce(&Library, &str) -> Result<(), db::DbError>,
+) -> Result<(), String> {
+    let name = name.trim();
+    if name.is_empty() {
+        return Err(empty.to_string());
+    }
+    with_library(state, |library| insert(library, name).map_err(|err| err.to_string()))
+}
+
+#[tauri::command]
 pub fn create_list(state: State<AppState>, name: String) -> Result<BookList, String> {
     let name = name.trim();
     if name.is_empty() {
