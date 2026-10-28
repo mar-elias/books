@@ -12,6 +12,10 @@ let editingId = null;
 let editingTitle = "";
 let editingListIds = [];
 let selectedBookId = null;
+const authorSort = {
+  key: "author",
+  order: { author: "asc", count: "asc" },
+};
 
 const BOOK_COLORS = new Set([
   "#f9c650",
@@ -259,6 +263,7 @@ function render() {
   renderNameNav(categoryNav, categories, "category");
   renderNameNav(tagNav, tags, "tag");
   renderLists();
+  content.classList.toggle("authors-view", viewState.kind === "authors");
   if (viewState.kind === "authors") renderAuthors();
   else renderBooks();
 }
@@ -294,7 +299,7 @@ function navButton(label, icon, active, onClick) {
 
 const NAV_ICON_PATHS = {
   library: "M1.35 3.15h3.7v10.45H1.35zm4.45-1.35h3.9v11.8H5.8zm4.65 2h3.7v9.8h-3.7z",
-  author: "M8 2.05a2.55 2.55 0 1 1 0 5.1 2.55 2.55 0 0 1 0-5.1zM2.55 14.2c.5-2.9 2.55-4.5 5.45-4.5s4.95 1.6 5.45 4.5c.08.42-.24.85-.68.85H3.23c-.44 0-.76-.43-.68-.85z",
+  author: "M8 3.1a2.55 2.55 0 1 1 0 5.1 2.55 2.55 0 0 1 0-5.1zM2.15 14.2c.54-3.25 2.74-5.05 5.85-5.05s5.31 1.8 5.85 5.05c.08.42-.24.85-.68.85H2.83c-.44 0-.76-.43-.68-.85z",
   list: "M2.15 4.25a1.05 1.05 0 1 0 2.1 0 1.05 1.05 0 1 0-2.1 0M5.5 3.55h8.35v1.4H5.5ZM2.15 8a1.05 1.05 0 1 0 2.1 0 1.05 1.05 0 1 0-2.1 0M5.5 7.3h8.35v1.4H5.5ZM2.15 11.75a1.05 1.05 0 1 0 2.1 0 1.05 1.05 0 1 0-2.1 0M5.5 11.05h8.35v1.4H5.5Z",
 };
 
@@ -478,38 +483,98 @@ function bookTile(book) {
   return article;
 }
 
+function authorSortOrder() {
+  return authorSort.order[authorSort.key];
+}
+
+function compareAuthors(a, b) {
+  const direction = authorSortOrder() === "asc" ? 1 : -1;
+  const byLabel = a.label.localeCompare(b.label, undefined, { sensitivity: "base", numeric: true });
+  const primary = authorSort.key === "count" ? a.count - b.count : byLabel;
+  if (primary !== 0) return primary * direction;
+  return authorSort.key === "count" ? byLabel : a.count - b.count;
+}
+
+function sortMark(direction) {
+  const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+  svg.setAttribute("class", "sort-mark");
+  svg.setAttribute("viewBox", "0 0 12 12");
+  svg.setAttribute("width", "10");
+  svg.setAttribute("height", "10");
+  svg.setAttribute("aria-hidden", "true");
+  const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
+  path.setAttribute("fill", "currentColor");
+  path.setAttribute("d", direction === "asc" ? "M6 2.2 10.2 9.2H1.8Z" : "M6 9.8 1.8 2.8h8.4Z");
+  svg.append(path);
+  return svg;
+}
+
+function authorColumn(key, label) {
+  const button = document.createElement("button");
+  button.type = "button";
+  button.className = `authors-col authors-col-${key}`;
+  button.dataset.sort = key;
+  const active = authorSort.key === key;
+  const order = authorSort.order[key];
+  button.setAttribute("aria-sort", active ? (order === "asc" ? "ascending" : "descending") : "none");
+  const text = document.createElement("span");
+  text.textContent = label;
+  if (active && key === "count") button.append(sortMark(order));
+  button.append(text);
+  if (active && key !== "count") button.append(sortMark(order));
+  button.addEventListener("click", () => {
+    if (authorSort.key === key) authorSort.order[key] = order === "asc" ? "desc" : "asc";
+    else authorSort.key = key;
+    renderAuthors();
+  });
+  return button;
+}
+
+function authorRow(group) {
+  const button = document.createElement("button");
+  button.type = "button";
+  button.className = "author-row";
+  const name = document.createElement("span");
+  name.className = "author-name";
+  name.dir = "auto";
+  name.textContent = group.label;
+  const count = document.createElement("span");
+  count.className = "author-count";
+  count.textContent = String(group.count);
+  button.append(name, count);
+  button.addEventListener("click", () => {
+    viewState.kind = "author";
+    viewState.author = group.author;
+    viewState.label = group.label;
+    reload();
+  });
+  return button;
+}
+
 function renderAuthors() {
   const filtering = query().length > 0;
+  const restoreSort = document.activeElement?.closest?.("[data-sort]")?.dataset.sort || "";
+  const previous = content.querySelector(".authors");
+  const scrollTop = previous ? previous.scrollTop : 0;
   const visible = authors.filter((group) => {
     const needle = query();
     return !needle || group.label.toLowerCase().includes(needle);
   });
+  visible.sort(compareAuthors);
   content.replaceChildren();
-  if (visible.length === 0) {
-    content.append(emptyState(filtering));
-    return;
-  }
   const list = document.createElement("div");
   list.className = "authors";
-  for (const group of visible) {
-    const button = document.createElement("button");
-    button.type = "button";
-    button.className = "author-row";
-    const name = document.createElement("span");
-    name.textContent = group.label;
-    const count = document.createElement("span");
-    count.className = "count";
-    count.textContent = String(group.count);
-    button.append(name, count);
-    button.addEventListener("click", () => {
-      viewState.kind = "author";
-      viewState.author = group.author;
-      viewState.label = group.label;
-      reload();
-    });
-    list.append(button);
-  }
+  const head = document.createElement("div");
+  head.className = "authors-head";
+  head.append(authorColumn("author", "Author"), authorColumn("count", "Book count"));
+  const body = document.createElement("div");
+  body.className = "authors-body";
+  if (visible.length === 0) body.append(emptyState(filtering));
+  else for (const group of visible) body.append(authorRow(group));
+  list.append(head, body);
   content.append(list);
+  if (scrollTop) list.scrollTop = scrollTop;
+  if (restoreSort) head.querySelector(`[data-sort="${restoreSort}"]`)?.focus();
 }
 
 function emptyState(filtering) {

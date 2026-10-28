@@ -14,7 +14,9 @@ Install WebKitGTK 4.1, GTK 3, Poppler, and Cairo, then run the app:
 
 ```bash
 sudo apt install libwebkit2gtk-4.1-dev libgtk-3-dev libayatana-appindicator3-dev librsvg2-dev patchelf libssl-dev libpoppler-glib-dev libcairo2-dev libpango1.0-dev pkg-config build-essential
+
 cargo install tauri-cli --version "^2"
+
 cargo tauri dev
 ```
 

@@ -327,6 +327,13 @@ input[type="search"] { width: 220px; }
   padding: 24px;
 }
 
+#content.authors-view {
+  display: flex;
+  flex-direction: column;
+  padding: 0;
+  overflow: hidden;
+}
+
 .grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, var(--book-width));
@@ -401,12 +408,95 @@ input[type="search"] { width: 220px; }
   flex-direction: column;
 }
 
-.author-row { justify-content: space-between; gap: 12px; }
+#content.authors-view > .authors {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  overscroll-behavior: contain;
+}
 
-.author-row span:first-child {
+.authors-head {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  flex: none;
+  height: 36px;
+  background: #e7e1d6;
+  border-bottom: 1px solid var(--line);
+  user-select: none;
+}
+
+.authors-head,
+.author-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 11rem;
+  column-gap: 12px;
+  align-items: center;
+  padding: 0 12px 0 4px;
+}
+
+button.authors-col {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  min-width: 0;
+  height: 28px;
+  margin: 0;
+  padding: 0 8px;
+  background: transparent;
+  border: 0;
+  border-radius: 4px;
+  color: var(--ink);
+  user-select: none;
+}
+
+.authors-col span {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.authors-col-author { justify-content: flex-start; }
+
+button.authors-col-count {
+  justify-content: flex-end;
+  padding-right: 0;
+}
+
+button.authors-col:hover { background: rgba(36, 31, 26, 0.08); }
+
+button.authors-col:focus-visible,
+.author-row:focus-visible { outline-offset: -2px; }
+
+.sort-mark { flex: none; display: block; }
+
+.authors-body { flex: 1; min-height: 0; }
+
+.authors-body .empty { min-height: 100%; }
+
+.author-row {
+  height: 32px;
+  border-radius: 0;
+  user-select: none;
+}
+
+.authors-body .author-row:nth-child(even) { background: rgba(36, 31, 26, 0.04); }
+
+.authors-body .author-row:hover { background: #ddd6c8; }
+
+.author-name {
+  min-width: 0;
+  padding-left: 8px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  text-align: start;
+}
+
+.author-count {
+  font-variant-numeric: tabular-nums;
+  text-align: right;
 }
 
 .count { color: var(--muted); }
