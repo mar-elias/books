@@ -34,6 +34,9 @@ pub fn run() {
             commands::add_book_to_list,
             commands::remove_book_from_list,
             commands::open_book,
+            commands::open_book_folder,
+            commands::app_settings,
+            commands::save_app_settings,
             commands::library_paths
         ])
         .run(tauri::generate_context!())

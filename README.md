@@ -90,5 +90,5 @@ The side panel should have 2 more sections: One is "Categories" another is "Tags
 
 # TODO:
 X - keep counts of books
-- install it as an exe
-- Show in folder option
+X - install it as an exe
+X - Show in folder option

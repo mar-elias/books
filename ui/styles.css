@@ -543,7 +543,7 @@ button.authors-col:focus-visible,
 #menu {
   position: fixed;
   z-index: 5;
-  min-width: 180px;
+  min-width: 210px;
   padding: 4px;
   background: var(--sheet);
   border: 1px solid var(--line);
@@ -554,6 +554,7 @@ button.authors-col:focus-visible,
   display: block;
   width: 100%;
   text-align: left;
+  white-space: nowrap;
   background: transparent;
   border: 0;
 }

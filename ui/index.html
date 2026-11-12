@@ -142,6 +142,12 @@
     <dialog id="settings-dialog">
       <form id="settings-form">
         <h2>Settings</h2>
+        <label>Open books with
+          <input id="settings-reader" type="text" spellcheck="false" placeholder="/usr/bin/okular" />
+        </label>
+        <label>File manager
+          <input id="settings-file-manager" type="text" spellcheck="false" placeholder="/usr/local/bin/dolphin" />
+        </label>
         <label>Library database path
           <input id="settings-database" type="text" readonly spellcheck="false" />
         </label>
@@ -150,7 +156,7 @@
         </label>
         <p id="settings-status"></p>
         <div class="dialog-actions">
-          <button id="settings-close" class="primary" type="button">Close</button>
+          <button id="settings-close" class="primary" type="button">Save</button>
         </div>
       </form>
     </dialog>

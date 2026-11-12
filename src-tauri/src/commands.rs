@@ -384,9 +384,93 @@ pub fn remove_book_from_list(state: State<AppState>, list_id: i64, book_id: i64)
     })
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AppSettings {
+    #[serde(default = "default_reader")]
+    pub reader: String,
+    #[serde(default = "default_file_manager")]
+    pub file_manager: String,
+}
+
+impl Default for AppSettings {
+    fn default() -> Self {
+        Self {
+            reader: default_reader(),
+            file_manager: default_file_manager(),
+        }
+    }
+}
+
+fn default_reader() -> String {
+    "/usr/bin/okular".to_string()
+}
+
+fn default_file_manager() -> String {
+    "/usr/local/bin/dolphin".to_string()
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SettingsView {
+    pub database_path: String,
+    pub covers_path: String,
+    pub reader: String,
+    pub file_manager: String,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SettingsForm {
+    pub reader: String,
+    pub file_manager: String,
+}
+
+#[tauri::command]
+pub fn app_settings() -> Result<SettingsView, String> {
+    let settings = load_settings()?;
+    Ok(SettingsView {
+        database_path: db::database_path().to_string_lossy().into_owned(),
+        covers_path: db::covers_dir().to_string_lossy().into_owned(),
+        reader: settings.reader,
+        file_manager: settings.file_manager,
+    })
+}
+
+#[tauri::command]
+pub fn save_app_settings(settings: SettingsForm) -> Result<(), String> {
+    let saved = AppSettings {
+        reader: clean_command(&settings.reader, "Enter a program for opening books.")?,
+        file_manager: clean_command(&settings.file_manager, "Enter a file manager.")?,
+    };
+    save_settings_to(&db::settings_path(), &saved)
+}
+
 #[tauri::command]
 pub fn open_book(state: State<AppState>, id: i64) -> Result<(), String> {
-    let path = with_library(&state, |library| {
+    let file = book_file(&state, id)?;
+    if !file.exists() {
+        return Err("That file is missing".to_string());
+    }
+    let settings = load_settings()?;
+    spawn_command(&settings.reader, &file)
+}
+
+#[tauri::command]
+pub fn open_book_folder(state: State<AppState>, id: i64) -> Result<(), String> {
+    let file = book_file(&state, id)?;
+    let Some(folder) = file.parent().filter(|folder| !folder.as_os_str().is_empty()) else {
+        return Err("That book has no folder.".to_string());
+    };
+    if !folder.exists() {
+        return Err("That folder is missing.".to_string());
+    }
+    let settings = load_settings()?;
+    spawn_command(&settings.file_manager, folder)
+}
+
+fn book_file(state: &AppState, id: i64) -> Result<PathBuf, String> {
+    let path = with_library(state, |library| {
         library
             .book(id)
             .map_err(|err| err.to_string())?
@@ -396,29 +480,55 @@ pub fn open_book(state: State<AppState>, id: i64) -> Result<(), String> {
     if path.trim().is_empty() {
         return Err("That book has no file.".to_string());
     }
-    let file = PathBuf::from(&path);
-    if !file.exists() {
-        return Err("That file is missing".to_string());
-    }
-    spawn_reader(&file)
+    Ok(PathBuf::from(path))
 }
 
-fn spawn_reader(path: &Path) -> Result<(), String> {
-    match spawn_detached("okular", path) {
-        Ok(()) => Ok(()),
-        Err(err) => spawn_detached("xdg-open", path).map_err(|fallback| {
-            format!("Could not open Okular ({err}). {fallback}")
-        }),
+fn load_settings() -> Result<AppSettings, String> {
+    load_settings_from(&db::settings_path())
+}
+
+fn load_settings_from(path: &Path) -> Result<AppSettings, String> {
+    match std::fs::read_to_string(path) {
+        Ok(text) => serde_json::from_str(&text).map_err(|_| "Could not read settings.".to_string()),
+        Err(err) if err.kind() == std::io::ErrorKind::NotFound => Ok(AppSettings::default()),
+        Err(err) => Err(err.to_string()),
     }
 }
 
-fn spawn_detached(program: &str, path: &Path) -> std::io::Result<()> {
-    let mut child = Command::new(program)
+fn save_settings_to(path: &Path, settings: &AppSettings) -> Result<(), String> {
+    if let Some(parent) = path.parent() {
+        std::fs::create_dir_all(parent).map_err(|err| err.to_string())?;
+    }
+    let text = serde_json::to_string_pretty(settings).map_err(|err| err.to_string())?;
+    std::fs::write(path, format!("{text}\n")).map_err(|err| err.to_string())
+}
+
+fn clean_command(value: &str, empty: &str) -> Result<String, String> {
+    let text = value.trim();
+    if command_parts(text).is_err() {
+        return Err(empty.to_string());
+    }
+    Ok(text.to_string())
+}
+
+fn command_parts(command: &str) -> Result<(String, Vec<String>), String> {
+    let mut parts = command.split_whitespace().map(str::to_string);
+    let Some(program) = parts.next() else {
+        return Err("Enter a program.".to_string());
+    };
+    Ok((program, parts.collect()))
+}
+
+fn spawn_command(command: &str, path: &Path) -> Result<(), String> {
+    let (program, args) = command_parts(command)?;
+    let mut child = Command::new(&program)
+        .args(&args)
         .arg(path)
         .stdin(Stdio::null())
         .stdout(Stdio::null())
         .stderr(Stdio::null())
-        .spawn()?;
+        .spawn()
+        .map_err(|err| format!("Could not start {program}. {err}"))?;
     std::thread::spawn(move || {
         let _ = child.wait();
     });
@@ -678,5 +788,36 @@ mod tests {
         assert_eq!(book_id_from_path("/12.png"), Some(12));
         assert_eq!(book_id_from_path("/"), None);
         assert_eq!(book_id_from_path("/0"), None);
+    }
+
+    #[test]
+    fn command_keeps_extra_arguments() {
+        let (program, args) = command_parts("flatpak run org.kde.okular").unwrap();
+        assert_eq!(program, "flatpak");
+        assert_eq!(args, ["run", "org.kde.okular"]);
+        assert!(command_parts("   ").is_err());
+    }
+
+    #[test]
+    fn settings_roundtrip_and_defaults() {
+        let dir = temp_dir();
+        let missing = load_settings_from(&dir.join("absent.json")).unwrap();
+        assert_eq!(missing.reader, "okular");
+        assert_eq!(missing.file_manager, "xdg-open");
+
+        let path = dir.join("settings.json");
+        save_settings_to(
+            &path,
+            &AppSettings {
+                reader: "ebook-viewer".to_string(),
+                file_manager: "dolphin".to_string(),
+            },
+        )
+        .unwrap();
+        let loaded = load_settings_from(&path).unwrap();
+        assert_eq!(loaded.reader, "ebook-viewer");
+        assert_eq!(loaded.file_manager, "dolphin");
+        assert!(clean_command("  ", "Enter a program for opening books.").is_err());
+        let _ = std::fs::remove_dir_all(dir);
     }
 }

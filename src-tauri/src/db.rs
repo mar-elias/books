@@ -647,6 +647,12 @@ pub fn covers_dir() -> PathBuf {
         .join("covers")
 }
 
+pub fn settings_path() -> PathBuf {
+    xdg_dir(dirs::config_dir(), ".config")
+        .join("ebook-reader")
+        .join("settings.json")
+}
+
 fn xdg_dir(primary: Option<PathBuf>, fallback: &str) -> PathBuf {
     primary.unwrap_or_else(|| {
         dirs::home_dir()
@@ -1048,6 +1054,7 @@ mod tests {
     fn default_paths_follow_xdg() {
         assert!(database_path().ends_with("ebook-reader/library.db"));
         assert!(covers_dir().ends_with("ebook-reader/covers"));
+        assert!(settings_path().ends_with("ebook-reader/settings.json"));
     }
 
     #[test]

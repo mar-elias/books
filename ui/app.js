@@ -477,6 +477,7 @@ function bookTile(book) {
     selectBook(book.id);
     const items = [
       { label: "Open", onSelect: () => openBook(book.id) },
+      { label: "Open folder location", onSelect: () => openBookFolder(book.id) },
       { label: "Edit", onSelect: () => editBook(book) },
     ];
     if (viewState.kind === "list") {
@@ -602,6 +603,14 @@ function emptyState(filtering) {
 async function openBook(id) {
   try {
     await invoke("open_book", { id });
+  } catch (error) {
+    toast(errorText(error));
+  }
+}
+
+async function openBookFolder(id) {
+  try {
+    await invoke("open_book_folder", { id });
   } catch (error) {
     toast(errorText(error));
   }
@@ -868,15 +877,37 @@ async function removeList(list) {
 async function openSettings() {
   const database = document.querySelector("#settings-database");
   const covers = document.querySelector("#settings-covers");
+  const reader = document.querySelector("#settings-reader");
+  const fileManager = document.querySelector("#settings-file-manager");
   const status = document.querySelector("#settings-status");
   database.value = "";
   covers.value = "";
+  reader.value = "";
+  fileManager.value = "";
   status.textContent = "";
   settingsDialog.showModal();
   try {
-    const paths = await invoke("library_paths");
-    database.value = paths.databasePath;
-    covers.value = paths.coversPath;
+    const settings = await invoke("app_settings");
+    database.value = settings.databasePath;
+    covers.value = settings.coversPath;
+    reader.value = settings.reader;
+    fileManager.value = settings.fileManager;
+  } catch (error) {
+    status.textContent = errorText(error);
+  }
+}
+
+async function saveSettings() {
+  const status = document.querySelector("#settings-status");
+  status.textContent = "";
+  try {
+    await invoke("save_app_settings", {
+      settings: {
+        reader: document.querySelector("#settings-reader").value,
+        fileManager: document.querySelector("#settings-file-manager").value,
+      },
+    });
+    settingsDialog.close();
   } catch (error) {
     status.textContent = errorText(error);
   }
@@ -942,10 +973,16 @@ function bind() {
       document.querySelector("#settings-status").textContent = errorText(error);
     });
   });
-  document.querySelector("#settings-close").addEventListener("click", () => settingsDialog.close());
+  document.querySelector("#settings-close").addEventListener("click", () => {
+    saveSettings().catch((error) => {
+      document.querySelector("#settings-status").textContent = errorText(error);
+    });
+  });
   document.querySelector("#settings-form").addEventListener("submit", (event) => {
     event.preventDefault();
-    settingsDialog.close();
+    saveSettings().catch((error) => {
+      document.querySelector("#settings-status").textContent = errorText(error);
+    });
   });
   backButton.addEventListener("click", () => {
     viewState.kind = "authors";
