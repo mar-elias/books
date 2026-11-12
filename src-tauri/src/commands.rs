@@ -264,6 +264,13 @@ pub fn lists(state: State<AppState>) -> Result<Vec<BookList>, String> {
 }
 
 #[tauri::command]
+pub fn shelf_counts(state: State<AppState>) -> Result<db::ShelfCounts, String> {
+    with_library(&state, |library| {
+        library.shelf_counts().map_err(|err| err.to_string())
+    })
+}
+
+#[tauri::command]
 pub fn add_book(state: State<AppState>, draft: BookForm) -> Result<Book, String> {
     let draft = form_to_draft(draft, None)?;
     with_library(&state, |library| {

@@ -9,18 +9,46 @@ The window is a Tauri shell. The shelf itself is HTML. The code is rust/JavaScri
 
 ![Mar-Elias Books](screenshots/mar-elias-books2.png)
 
-## Build
+# Dependencies:
 Install WebKitGTK 4.1, GTK 3, Poppler, and Cairo, then run the app:
 
-```bash
-sudo apt install libwebkit2gtk-4.1-dev libgtk-3-dev libayatana-appindicator3-dev librsvg2-dev patchelf libssl-dev libpoppler-glib-dev libcairo2-dev libpango1.0-dev pkg-config build-essential
+```
+        sudo apt install libwebkit2gtk-4.1-dev \
+                        libgtk-3-dev \
+                        libayatana-appindicator3-dev \
+                        librsvg2-dev \
+                        patchelf \
+                        libssl-dev \
+                        libpoppler-glib-dev \
+                        libcairo2-dev \
+                        libpango1.0-dev \
+                        pkg-config \
+                        build-essential
 
-cargo install tauri-cli --version "^2"
-
-cargo tauri dev
+        cargo install tauri-cli --version "^2"
 ```
 
-Rust 1.92 or newer is required. Okular is used to open books; if it is not installed, the file opens with `xdg-open`.
+Rust 1.92 or newer is required.
+
+Okular is used to open books; if it is not installed, the file opens with `xdg-open`.
+
+# Build:
+```
+        # To build and run a live development version:
+        cargo tauri dev
+
+        # To build release:
+        cargo tauri build --no-bundle
+        ./src-tauri/target/release/ebook-reader
+
+        # Or equivalent:
+        cd src-tauri
+        cargo build --release
+        ./target/release/ebook-reader
+
+        # This will produce installers (deb, appimage and rpm):
+        cargo tauri build
+```
 
 # Storage:
 Library database: `/home/elias/.local/share/ebook-reader/library.db`
@@ -59,3 +87,7 @@ It is possible to add a book entry without a book path or a cover path.
 ***
 
 The side panel should have 2 more sections: One is "Categories" another is "Tags" each one to browse all existing categories and tags across all books.
+
+# TODO:
+- keep counts of books
+- install it as an exe

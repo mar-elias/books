@@ -22,6 +22,7 @@ pub fn run() {
             commands::categories,
             commands::tags,
             commands::lists,
+            commands::shelf_counts,
             commands::add_book,
             commands::update_book,
             commands::delete_book,

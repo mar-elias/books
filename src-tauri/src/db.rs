@@ -55,6 +55,14 @@ pub struct NameCount {
 pub struct BookList {
     pub id: i64,
     pub name: String,
+    pub count: i64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ShelfCounts {
+    pub books: i64,
+    pub authors: i64,
 }
 
 #[derive(Debug, Clone)]
@@ -369,18 +377,35 @@ impl Library {
     }
 
     pub fn lists(&self) -> Result<Vec<BookList>, DbError> {
-        let mut stmt = self
-            .conn
-            .prepare("SELECT id, name FROM lists ORDER BY position, id")?;
+        let mut stmt = self.conn.prepare(
+            "SELECT l.id, l.name, COUNT(lb.book_id)
+             FROM lists l
+             LEFT JOIN list_books lb ON lb.list_id = l.id
+             GROUP BY l.id
+             ORDER BY l.position, l.id",
+        )?;
         let lists = stmt
             .query_map([], |row| {
                 Ok(BookList {
                     id: row.get(0)?,
                     name: row.get(1)?,
+                    count: row.get(2)?,
                 })
             })?
             .collect::<Result<Vec<_>, _>>()?;
         Ok(lists)
+    }
+
+    pub fn shelf_counts(&self) -> Result<ShelfCounts, DbError> {
+        let books = self
+            .conn
+            .query_row("SELECT COUNT(*) FROM books", [], |row| row.get(0))?;
+        let authors = self.conn.query_row(
+            "SELECT COUNT(DISTINCT author) FROM books",
+            [],
+            |row| row.get(0),
+        )?;
+        Ok(ShelfCounts { books, authors })
     }
 
     pub fn create_list(&self, name: &str) -> Result<BookList, DbError> {
@@ -396,6 +421,7 @@ impl Library {
         Ok(BookList {
             id,
             name: name.to_string(),
+            count: 0,
         })
     }
 
@@ -826,14 +852,20 @@ mod tests {
         assert!(herbert[0].cover_path.as_ref().unwrap().ends_with(".png"));
 
         let list = library.create_list("Weekend").unwrap();
+        assert_eq!(list.count, 0);
         assert!(library.add_book_to_list(list.id, first.id).unwrap());
         assert!(!library.add_book_to_list(list.id, first.id).unwrap());
+        assert_eq!(library.lists().unwrap()[0].count, 1);
+        let counts = library.shelf_counts().unwrap();
+        assert_eq!(counts.books, 3);
+        assert_eq!(counts.authors, 2);
         let members = library.books(&BookScope::List(list.id)).unwrap();
         assert_eq!(members.len(), 1);
         assert_eq!(members[0].id, first.id);
         assert_eq!(members[0].list_ids, vec![list.id]);
 
         library.remove_book_from_list(list.id, first.id).unwrap();
+        assert_eq!(library.lists().unwrap()[0].count, 0);
         assert!(library.book(first.id).unwrap().unwrap().list_ids.is_empty());
         assert!(library.books(&BookScope::List(list.id)).unwrap().is_empty());
 

@@ -4,6 +4,7 @@ let authors = [];
 let categories = [];
 let tags = [];
 let lists = [];
+let shelf = { books: 0, authors: 0 };
 let search = "";
 let reloadToken = 0;
 let coverVersion = 0;
@@ -228,6 +229,7 @@ async function reload() {
   const token = ++reloadToken;
   try {
     const nextLists = await invoke("lists");
+    const nextShelf = await invoke("shelf_counts");
     const nextCategories = await invoke("categories");
     const nextTags = await invoke("tags");
     if (viewState.kind === "category" && !nextCategories.some((item) => item.name === viewState.name)) {
@@ -240,6 +242,7 @@ async function reload() {
     const nextBooks = viewState.kind === "authors" ? [] : await invoke("books", { scope: scopePayload() });
     if (token !== reloadToken) return;
     lists = nextLists;
+    shelf = nextShelf;
     categories = nextCategories;
     tags = nextTags;
     authors = nextAuthors;
@@ -274,27 +277,35 @@ function renderLibrary() {
     navButton("All books", "library", viewState.kind === "all", () => {
       viewState.kind = "all";
       reload();
-    }),
+    }, shelf.books),
     navButton("Authors", "author", viewState.kind === "authors" || viewState.kind === "author", () => {
       viewState.kind = "authors";
       reload();
-    }),
+    }, shelf.authors),
   );
 }
 
-function navButton(label, icon, active, onClick) {
+function navButton(label, icon, active, onClick, count) {
   const button = document.createElement("button");
   button.type = "button";
   button.className = active ? "nav active" : "nav";
   const main = document.createElement("span");
   main.className = "nav-main";
-  const text = document.createElement("span");
-  text.className = "nav-label";
-  text.textContent = label;
-  main.append(navIcon(icon), text);
+  main.append(navIcon(icon));
+  appendCountedLabel(main, label, count);
   button.append(main);
   button.addEventListener("click", onClick);
   return button;
+}
+
+function appendCountedLabel(parent, label, count) {
+  const text = document.createElement("span");
+  text.className = "nav-label";
+  text.textContent = label;
+  const badge = document.createElement("span");
+  badge.className = "count";
+  badge.textContent = `(${count})`;
+  parent.append(text, badge);
 }
 
 const NAV_ICON_PATHS = {
@@ -374,10 +385,8 @@ function renderLists() {
     const name = document.createElement("button");
     name.type = "button";
     name.className = "list-name";
-    const label = document.createElement("span");
-    label.className = "nav-label";
-    label.textContent = list.name;
-    name.append(navIcon("list"), label);
+    name.append(navIcon("list"));
+    appendCountedLabel(name, list.name, list.count);
     name.addEventListener("click", () => {
       viewState.kind = "list";
       viewState.id = list.id;
