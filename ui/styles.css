@@ -607,7 +607,8 @@ dialog {
 }
 
 #book-dialog {
-  width: min(760px, calc(100% - 32px));
+  width: 75%;
+  height: 75%;
   container-type: inline-size;
 }
 
@@ -768,13 +769,18 @@ dialog input[type="text"], dialog textarea { width: 100%; box-sizing: border-box
 .dialog-actions {
   display: flex;
   justify-content: flex-end;
+  align-items: center;
   gap: 8px;
   margin-top: 16px;
 }
 
+.dialog-actions-end {
+  display: flex;
+  gap: 8px;
+  margin-left: auto;
+}
+
 #book-delete {
-  /* width: 100%; */
-  margin-top: 8px;
   background: #aa2e24;
   border-color: var(--danger);
   color: var(--accent-ink);
