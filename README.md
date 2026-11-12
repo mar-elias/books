@@ -89,5 +89,6 @@ It is possible to add a book entry without a book path or a cover path.
 The side panel should have 2 more sections: One is "Categories" another is "Tags" each one to browse all existing categories and tags across all books.
 
 # TODO:
-- keep counts of books
+X - keep counts of books
 - install it as an exe
+- Show in folder option

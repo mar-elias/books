@@ -365,14 +365,9 @@ function nameButton(item, active, kind, onClick) {
   button.className = active ? "nav active" : "nav";
   const main = document.createElement("span");
   main.className = "nav-main";
-  const name = document.createElement("span");
-  name.className = "nav-label";
-  name.textContent = item.name;
-  main.append(navIcon(kind), name);
-  const count = document.createElement("span");
-  count.className = "count";
-  count.textContent = String(item.count);
-  button.append(main, count);
+  main.append(navIcon(kind));
+  appendCountedLabel(main, item.name, item.count);
+  button.append(main);
   button.addEventListener("click", onClick);
   return button;
 }
