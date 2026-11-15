@@ -32,13 +32,14 @@ Rust 1.92 or newer is required.
 
 Okular is used to open books; if it is not installed, the file opens with `xdg-open`.
 
-# Build:
+# Build and run:
 ```
         # To build and run a live development version:
         cargo tauri dev
 
         # To build release:
         cargo tauri build --no-bundle
+        # Run:
         ./src-tauri/target/release/ebook-reader
 
         # Or equivalent:
