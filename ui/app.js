@@ -973,6 +973,7 @@ function bind() {
       document.querySelector("#settings-status").textContent = errorText(error);
     });
   });
+  document.querySelector("#settings-cancel").addEventListener("click", () => settingsDialog.close());
   document.querySelector("#settings-close").addEventListener("click", () => {
     saveSettings().catch((error) => {
       document.querySelector("#settings-status").textContent = errorText(error);
