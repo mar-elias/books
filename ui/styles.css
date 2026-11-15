@@ -559,6 +559,11 @@ button.authors-col:focus-visible,
   border: 0;
 }
 
+#menu button:hover:not(:disabled),
+#menu .menu-item:hover > button {
+  background: var(--sidebar);
+}
+
 #menu button:disabled {
   color: var(--muted);
 }
