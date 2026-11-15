@@ -93,3 +93,5 @@ The side panel should have 2 more sections: One is "Categories" another is "Tags
 X - keep counts of books
 X - install it as an exe
 X - Show in folder option
+- add a link to a notes file to each book. Books with notes should display an icon in the list.
+- set color to cat/tag/list
