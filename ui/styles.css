@@ -14,8 +14,6 @@
   font-family: "Liberation Sans", "Nimbus Sans", sans-serif;
 }
 
-* { box-sizing: border-box; }
-
 [hidden] { display: none !important; }
 
 html, body {
@@ -829,19 +827,44 @@ dialog input[type="text"], dialog textarea { width: 100%; box-sizing: border-box
   margin-top: 12px;
 }
 
-.ratings { display: flex; gap: 6px; }
+.ratings { display: flex; gap: 2px; align-items: center; }
+
+.rating-clear {
+  width: 28px;
+  height: 28px;
+  margin-right: 4px;
+  padding: 0;
+  background:
+    linear-gradient(to top right, transparent calc(50% - 1px), var(--muted) 50%, transparent calc(50% + 1px)),
+    var(--sheet);
+}
+
+.rating-clear[aria-pressed="true"] {
+  outline: 2px solid var(--ink);
+  outline-offset: 2px;
+}
 
 .rating {
   width: 28px;
   height: 28px;
-  padding: 0;
+  padding: 2px;
+  border: 0;
+  background: transparent;
+  color: var(--muted);
 }
 
-.rating[aria-pressed="true"] {
-  background: var(--ink);
-  color: var(--paper);
-  border-color: var(--ink);
+.rating svg { display: block; width: 100%; height: 100%; }
+
+.rating path {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1;
+  stroke-linejoin: round;
 }
+
+.rating.filled { color: var(--ink); }
+
+.rating.filled path { fill: currentColor; }
 
 .picker {
   position: relative;

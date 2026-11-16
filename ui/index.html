@@ -105,13 +105,22 @@
             <div class="rating-field" id="book-rating">
               <span>Rating</span>
               <div class="ratings" role="radiogroup" aria-label="Rating">
-                <button type="button" class="rating none" data-rating="" aria-label="No rating" aria-pressed="true">—</button>
-                <button type="button" class="rating" data-rating="0" aria-label="0">0</button>
-                <button type="button" class="rating" data-rating="1" aria-label="1">1</button>
-                <button type="button" class="rating" data-rating="2" aria-label="2">2</button>
-                <button type="button" class="rating" data-rating="3" aria-label="3">3</button>
-                <button type="button" class="rating" data-rating="4" aria-label="4">4</button>
-                <button type="button" class="rating" data-rating="5" aria-label="5">5</button>
+                <button type="button" id="rating-clear" class="rating-clear" aria-label="Clear rating" aria-pressed="true"></button>
+                <button type="button" class="rating" data-rating="1" aria-label="1 star" aria-pressed="false">
+                  <svg viewBox="0 0 12 12" aria-hidden="true"><path d="M6 .9 7.5 4.5h3.8L8.3 6.8l1 3.7L6 8.5 2.7 10.5l1-3.7L.7 4.5h3.8Z" /></svg>
+                </button>
+                <button type="button" class="rating" data-rating="2" aria-label="2 stars" aria-pressed="false">
+                  <svg viewBox="0 0 12 12" aria-hidden="true"><path d="M6 .9 7.5 4.5h3.8L8.3 6.8l1 3.7L6 8.5 2.7 10.5l1-3.7L.7 4.5h3.8Z" /></svg>
+                </button>
+                <button type="button" class="rating" data-rating="3" aria-label="3 stars" aria-pressed="false">
+                  <svg viewBox="0 0 12 12" aria-hidden="true"><path d="M6 .9 7.5 4.5h3.8L8.3 6.8l1 3.7L6 8.5 2.7 10.5l1-3.7L.7 4.5h3.8Z" /></svg>
+                </button>
+                <button type="button" class="rating" data-rating="4" aria-label="4 stars" aria-pressed="false">
+                  <svg viewBox="0 0 12 12" aria-hidden="true"><path d="M6 .9 7.5 4.5h3.8L8.3 6.8l1 3.7L6 8.5 2.7 10.5l1-3.7L.7 4.5h3.8Z" /></svg>
+                </button>
+                <button type="button" class="rating" data-rating="5" aria-label="5 stars" aria-pressed="false">
+                  <svg viewBox="0 0 12 12" aria-hidden="true"><path d="M6 .9 7.5 4.5h3.8L8.3 6.8l1 3.7L6 8.5 2.7 10.5l1-3.7L.7 4.5h3.8Z" /></svg>
+                </button>
               </div>
             </div>
           </div>

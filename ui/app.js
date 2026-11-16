@@ -914,11 +914,21 @@ function chosenColor() {
   return swatch ? swatch.dataset.color : "";
 }
 
-function selectRating(rating) {
-  const chosen = bookRating({ rating }) == null ? "" : String(rating);
+function paintStars(count) {
   for (const button of document.querySelectorAll("#book-rating .rating")) {
-    button.setAttribute("aria-pressed", button.dataset.rating === chosen ? "true" : "false");
+    button.classList.toggle("filled", count != null && Number(button.dataset.rating) <= count);
   }
+}
+
+function selectRating(rating) {
+  const score = bookRating({ rating });
+  const chosen = score != null && score > 0 ? score : null;
+  for (const button of document.querySelectorAll("#book-rating .rating")) {
+    button.setAttribute("aria-pressed", Number(button.dataset.rating) === chosen ? "true" : "false");
+  }
+  paintStars(chosen);
+  const clear = document.querySelector("#rating-clear");
+  clear.setAttribute("aria-pressed", chosen == null ? "true" : "false");
 }
 
 function chosenRating() {
@@ -1255,8 +1265,12 @@ function bind() {
   for (const swatch of document.querySelectorAll("#book-colors .swatch")) {
     swatch.addEventListener("click", () => selectColor(swatch.dataset.color));
   }
+  document.querySelector("#rating-clear").addEventListener("click", () => selectRating(null));
   for (const button of document.querySelectorAll("#book-rating .rating")) {
-    button.addEventListener("click", () => selectRating(button.dataset.rating === "" ? null : Number(button.dataset.rating)));
+    button.addEventListener("click", () => {
+      const value = Number(button.dataset.rating);
+      selectRating(chosenRating() === String(value) ? null : value);
+    });
   }
   for (const picker of document.querySelectorAll(".picker")) {
     const button = picker.querySelector(".picker-button");
