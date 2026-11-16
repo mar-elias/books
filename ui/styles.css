@@ -854,11 +854,6 @@ dialog input[type="text"], dialog textarea { width: 100%; box-sizing: border-box
 
 .catalog-row:hover:not(.selected) { background: var(--sidebar); }
 
-.catalog-name, .catalog-more {
-  background: transparent;
-  border: 0;
-}
-
 .catalog-name {
   display: flex;
   align-items: center;
@@ -866,17 +861,18 @@ dialog input[type="text"], dialog textarea { width: 100%; box-sizing: border-box
   flex: 1;
   min-width: 0;
   text-align: left;
-  padding: 8px 4px 8px 10px;
-}
-
-.catalog-more {
-  flex: none;
+  background: transparent;
+  border: 0;
   padding: 8px 10px;
-  color: var(--muted);
 }
 
-.catalog-row.selected .catalog-more,
 .catalog-row.selected .count { color: #fff; }
+
+#catalog-sort, #catalog-rename, #catalog-delete {
+  height: 32px;
+}
+
+#catalog-delete { color: var(--danger); }
 
 #catalog-up, #catalog-down {
   display: inline-flex;
@@ -893,26 +889,3 @@ dialog input[type="text"], dialog textarea { width: 100%; box-sizing: border-box
   color: var(--muted);
   cursor: default;
 }
-
-#catalog-menu {
-  position: absolute;
-  z-index: 2;
-  min-width: 140px;
-  padding: 4px;
-  background: var(--sheet);
-  border: 1px solid var(--line);
-  box-shadow: var(--shadow);
-}
-
-#catalog-menu button {
-  display: block;
-  width: 100%;
-  text-align: left;
-  background: transparent;
-  border: 0;
-  white-space: nowrap;
-}
-
-#catalog-menu button:hover { background: var(--sidebar); }
-
-#catalog-menu button.danger { color: var(--danger); }

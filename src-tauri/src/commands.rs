@@ -398,6 +398,27 @@ pub fn move_list(state: State<AppState>, id: i64, direction: i32) -> Result<(), 
     })
 }
 
+#[tauri::command]
+pub fn sort_category(state: State<AppState>, mode: String) -> Result<(), String> {
+    sort_catalog(&state, "category", &mode, |library, by_name| {
+        library.sort_category(by_name)
+    })
+}
+
+#[tauri::command]
+pub fn sort_tag(state: State<AppState>, mode: String) -> Result<(), String> {
+    sort_catalog(&state, "tag", &mode, |library, by_name| {
+        library.sort_tag(by_name)
+    })
+}
+
+#[tauri::command]
+pub fn sort_list(state: State<AppState>, mode: String) -> Result<(), String> {
+    sort_catalog(&state, "list", &mode, |library, by_name| {
+        library.sort_list(by_name)
+    })
+}
+
 fn require_name(name: String, empty: &str) -> Result<String, String> {
     let name = name.trim();
     if name.is_empty() {
@@ -430,6 +451,20 @@ fn move_catalog(
         return Err("Choose up or down.".to_string());
     }
     change_catalog(state, label, action)
+}
+
+fn sort_catalog(
+    state: &AppState,
+    label: &str,
+    mode: &str,
+    action: impl FnOnce(&Library, bool) -> Result<(), db::DbError>,
+) -> Result<(), String> {
+    let by_name = match mode {
+        "name" => true,
+        "added" => false,
+        _ => return Err("Choose alphabetical or date added.".to_string()),
+    };
+    change_catalog(state, label, |library| action(library, by_name))
 }
 
 #[tauri::command]

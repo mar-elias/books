@@ -365,6 +365,18 @@ impl Library {
         self.move_named("lists", id, direction)
     }
 
+    pub fn sort_category(&self, by_name: bool) -> Result<(), DbError> {
+        self.sort_named("categories", by_name)
+    }
+
+    pub fn sort_tag(&self, by_name: bool) -> Result<(), DbError> {
+        self.sort_named("tags", by_name)
+    }
+
+    pub fn sort_list(&self, by_name: bool) -> Result<(), DbError> {
+        self.sort_named("lists", by_name)
+    }
+
     fn insert_named(&self, table: &str, name: &str, kind: UniqueKind) -> Result<NameCount, DbError> {
         let sql = format!(
             "INSERT INTO {table} (name, position)
@@ -419,6 +431,26 @@ impl Library {
             return Ok(());
         }
         ids.swap(index, target as usize);
+        self.write_positions(table, &ids)
+    }
+
+    fn sort_named(&self, table: &str, by_name: bool) -> Result<(), DbError> {
+        let order = if by_name {
+            "name COLLATE NOCASE, id"
+        } else {
+            "id"
+        };
+        let ids = {
+            let mut stmt = self
+                .conn
+                .prepare(&format!("SELECT id FROM {table} ORDER BY {order}"))?;
+            stmt.query_map([], |row| row.get(0))?
+                .collect::<Result<Vec<i64>, _>>()?
+        };
+        self.write_positions(table, &ids)
+    }
+
+    fn write_positions(&self, table: &str, ids: &[i64]) -> Result<(), DbError> {
         let tx = self.conn.unchecked_transaction()?;
         for (position, item_id) in ids.iter().enumerate() {
             tx.execute(
@@ -1274,6 +1306,51 @@ mod tests {
         assert_eq!(
             lists.iter().map(|list| list.name.as_str()).collect::<Vec<_>>(),
             vec!["First", "Third", "Second"]
+        );
+        let _ = fs::remove_dir_all(dir);
+    }
+
+    #[test]
+    fn catalog_sorts_by_name_or_date_added() {
+        let (library, dir) = temp_library();
+        library.create_category("Zebra").unwrap();
+        library.create_category("Alpha").unwrap();
+        library.create_category("Middle").unwrap();
+        library.sort_category(true).unwrap();
+        let names = |items: Vec<NameCount>| {
+            items.into_iter().map(|item| item.name).collect::<Vec<_>>()
+        };
+        assert_eq!(
+            names(library.categories().unwrap()),
+            vec!["Alpha", "Middle", "Zebra"]
+        );
+        library.sort_category(false).unwrap();
+        assert_eq!(
+            names(library.categories().unwrap()),
+            vec!["Zebra", "Alpha", "Middle"]
+        );
+
+        library.create_list("Weekend").unwrap();
+        library.create_list("Later").unwrap();
+        library.sort_list(true).unwrap();
+        assert_eq!(
+            library
+                .lists()
+                .unwrap()
+                .into_iter()
+                .map(|list| list.name)
+                .collect::<Vec<_>>(),
+            vec!["Later".to_string(), "Weekend".to_string()]
+        );
+        library.sort_list(false).unwrap();
+        assert_eq!(
+            library
+                .lists()
+                .unwrap()
+                .into_iter()
+                .map(|list| list.name)
+                .collect::<Vec<_>>(),
+            vec!["Weekend".to_string(), "Later".to_string()]
         );
         let _ = fs::remove_dir_all(dir);
     }

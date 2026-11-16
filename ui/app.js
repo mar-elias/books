@@ -48,7 +48,6 @@ const confirmDialog = document.querySelector("#confirm-dialog");
 const settingsDialog = document.querySelector("#settings-dialog");
 const catalogDialog = document.querySelector("#catalog-dialog");
 const catalogList = document.querySelector("#catalog-list");
-const catalogMenu = document.querySelector("#catalog-menu");
 const catalogStatus = document.querySelector("#catalog-status");
 let catalogKind = null;
 let catalogSelection = null;
@@ -68,6 +67,7 @@ const CATALOGS = {
     rename: "rename_category",
     remove: "delete_category",
     move: "move_category",
+    sort: "sort_category",
     items: () => categories,
   },
   tag: {
@@ -83,6 +83,7 @@ const CATALOGS = {
     rename: "rename_tag",
     remove: "delete_tag",
     move: "move_tag",
+    sort: "sort_tag",
     items: () => tags,
   },
   list: {
@@ -98,6 +99,7 @@ const CATALOGS = {
     rename: "rename_list",
     remove: "delete_list",
     move: "move_list",
+    sort: "sort_list",
     items: () => lists,
   },
 };
@@ -875,7 +877,6 @@ function openCatalog(kind) {
   catalogKind = kind;
   catalogSelection = null;
   catalogStatus.textContent = "";
-  hideCatalogMenu();
   renderCatalog();
   if (!catalogDialog.open) catalogDialog.showModal();
 }
@@ -884,7 +885,6 @@ function renderCatalog() {
   const spec = CATALOGS[catalogKind];
   if (!spec) return;
   const scrollTop = catalogList.scrollTop;
-  hideCatalogMenu();
   document.querySelector("#catalog-title").textContent = spec.title;
   document.querySelector("#catalog-add").setAttribute("aria-label", spec.addLabel);
   catalogList.replaceChildren();
@@ -909,31 +909,14 @@ function renderCatalog() {
     name.className = "catalog-name";
     name.dir = "auto";
     appendCountedLabel(name, item.name, item.count);
-    name.addEventListener("click", () => {
-      hideCatalogMenu();
-      selectCatalog(item.id);
-    });
-    const more = document.createElement("button");
-    more.type = "button";
-    more.className = "catalog-more";
-    more.setAttribute("aria-label", `${item.name} actions`);
-    more.textContent = "···";
-    more.addEventListener("click", (event) => {
-      event.stopPropagation();
-      selectCatalog(item.id);
-      if (!catalogMenu.hidden && catalogMenu.dataset.id === String(item.id)) {
-        hideCatalogMenu();
-        return;
-      }
-      showCatalogMenu(more, item);
-    });
-    row.append(name, more);
+    name.addEventListener("click", () => selectCatalog(item.id));
+    row.append(name);
     catalogList.append(row);
   }
   catalogList.scrollTop = scrollTop;
   const current = catalogList.querySelector(".catalog-row.selected");
   if (current) current.scrollIntoView({ block: "nearest" });
-  updateCatalogMoveButtons();
+  updateCatalogButtons();
 }
 
 function selectCatalog(id) {
@@ -943,72 +926,52 @@ function selectCatalog(id) {
     row.classList.toggle("selected", selected);
     row.setAttribute("aria-selected", selected ? "true" : "false");
   }
-  updateCatalogMoveButtons();
+  updateCatalogButtons();
 }
 
-function updateCatalogMoveButtons() {
+function selectedCatalogItem() {
+  const spec = CATALOGS[catalogKind];
+  if (!spec || catalogSelection == null) return null;
+  return spec.items().find((item) => item.id === catalogSelection) || null;
+}
+
+function nextCatalogSort(items) {
+  if (items.length < 2) return "name";
+  const byName = items.slice().sort((a, b) => {
+    const compared = a.name.localeCompare(b.name, undefined, { sensitivity: "base" });
+    return compared || a.id - b.id;
+  });
+  const alreadyNamed = byName.every((item, index) => item.id === items[index].id);
+  return alreadyNamed ? "added" : "name";
+}
+
+function updateCatalogButtons() {
   const spec = CATALOGS[catalogKind];
   const items = spec ? spec.items() : [];
   const index = items.findIndex((item) => item.id === catalogSelection);
+  const none = index < 0;
   document.querySelector("#catalog-up").disabled = catalogBusy || index <= 0;
-  document.querySelector("#catalog-down").disabled = catalogBusy || index < 0 || index >= items.length - 1;
+  document.querySelector("#catalog-down").disabled = catalogBusy || none || index >= items.length - 1;
+  document.querySelector("#catalog-rename").disabled = catalogBusy || none;
+  document.querySelector("#catalog-delete").disabled = catalogBusy || none;
+  const sort = document.querySelector("#catalog-sort");
+  const mode = nextCatalogSort(items);
+  sort.disabled = catalogBusy || items.length < 2;
+  sort.dataset.mode = mode;
+  sort.textContent = mode === "name" ? "A–Z" : "Added";
+  sort.setAttribute("aria-label", mode === "name" ? "Sort alphabetically" : "Sort by date added");
 }
 
 async function runCatalog(task) {
   if (catalogBusy) return;
   catalogBusy = true;
-  updateCatalogMoveButtons();
+  updateCatalogButtons();
   try {
     await task();
   } finally {
     catalogBusy = false;
-    if (catalogDialog.open) updateCatalogMoveButtons();
+    if (catalogDialog.open) updateCatalogButtons();
   }
-}
-
-function hideCatalogMenu() {
-  if (catalogMenu.hidden) return;
-  catalogMenu.hidden = true;
-  catalogMenu.replaceChildren();
-  delete catalogMenu.dataset.id;
-}
-
-function showCatalogMenu(anchor, item) {
-  catalogMenu.replaceChildren();
-  catalogMenu.dataset.id = String(item.id);
-  catalogMenu.append(
-    catalogMenuButton("Rename", false, () => runCatalog(() => renameCatalogItem(item))),
-    catalogMenuButton("Delete", true, () => runCatalog(() => removeCatalogItem(item))),
-  );
-  catalogMenu.hidden = false;
-  catalogMenu.style.left = "0px";
-  catalogMenu.style.top = "0px";
-  const menuRect = catalogMenu.getBoundingClientRect();
-  const anchorRect = anchor.getBoundingClientRect();
-  const dialogRect = catalogDialog.getBoundingClientRect();
-  let top = anchorRect.bottom - dialogRect.top + 4;
-  if (anchorRect.bottom + menuRect.height + 8 > window.innerHeight) {
-    top = anchorRect.top - dialogRect.top - menuRect.height - 4;
-  }
-  let left = anchorRect.right - dialogRect.left - menuRect.width;
-  const minLeft = 8;
-  const maxLeft = dialogRect.width - menuRect.width - 8;
-  left = Math.min(Math.max(minLeft, left), Math.max(minLeft, maxLeft));
-  catalogMenu.style.left = `${left}px`;
-  catalogMenu.style.top = `${top}px`;
-}
-
-function catalogMenuButton(label, danger, onSelect) {
-  const button = document.createElement("button");
-  button.type = "button";
-  button.textContent = label;
-  button.setAttribute("role", "menuitem");
-  if (danger) button.className = "danger";
-  button.addEventListener("click", () => {
-    hideCatalogMenu();
-    onSelect();
-  });
-  return button;
 }
 
 function catalogError(error) {
@@ -1017,7 +980,6 @@ function catalogError(error) {
 
 async function addCatalogItem() {
   const spec = CATALOGS[catalogKind];
-  hideCatalogMenu();
   const name = await askPrompt(spec.addTitle, spec.addConfirm, "");
   if (name == null) return;
   try {
@@ -1030,7 +992,9 @@ async function addCatalogItem() {
   }
 }
 
-async function renameCatalogItem(item) {
+async function renameCatalogItem() {
+  const item = selectedCatalogItem();
+  if (!item) return;
   const spec = CATALOGS[catalogKind];
   const name = await askPrompt(spec.renameTitle, "Rename", item.name);
   if (name == null) return;
@@ -1048,7 +1012,9 @@ async function renameCatalogItem(item) {
   }
 }
 
-async function removeCatalogItem(item) {
+async function removeCatalogItem() {
+  const item = selectedCatalogItem();
+  if (!item) return;
   const spec = CATALOGS[catalogKind];
   const confirmed = await askConfirm(spec.deleteTitle, spec.deleteMessage(item.name), "Delete");
   if (!confirmed) return;
@@ -1078,6 +1044,18 @@ async function moveCatalogItem(direction) {
   if (index < 0 || index + direction < 0 || index + direction >= items.length) return;
   try {
     await invoke(spec.move, { id: catalogSelection, direction });
+    catalogStatus.textContent = "";
+    await reload();
+  } catch (error) {
+    catalogError(error);
+  }
+}
+
+async function sortCatalogItems() {
+  const spec = CATALOGS[catalogKind];
+  const mode = document.querySelector("#catalog-sort").dataset.mode || "name";
+  try {
+    await invoke(spec.sort, { mode });
     catalogStatus.textContent = "";
     await reload();
   } catch (error) {
@@ -1140,24 +1118,19 @@ function bind() {
   document.querySelector("#catalog-down").addEventListener("click", () => {
     runCatalog(() => moveCatalogItem(1)).catch(catalogError);
   });
-  document.querySelector("#catalog-close").addEventListener("click", () => {
-    hideCatalogMenu();
-    catalogDialog.close();
+  document.querySelector("#catalog-sort").addEventListener("click", () => {
+    runCatalog(() => sortCatalogItems()).catch(catalogError);
   });
+  document.querySelector("#catalog-rename").addEventListener("click", () => {
+    runCatalog(() => renameCatalogItem()).catch(catalogError);
+  });
+  document.querySelector("#catalog-delete").addEventListener("click", () => {
+    runCatalog(() => removeCatalogItem()).catch(catalogError);
+  });
+  document.querySelector("#catalog-close").addEventListener("click", () => catalogDialog.close());
   document.querySelector("#catalog-form").addEventListener("submit", (event) => {
     event.preventDefault();
   });
-  catalogDialog.addEventListener("click", (event) => {
-    if (!catalogMenu.hidden && !catalogMenu.contains(event.target)) hideCatalogMenu();
-  });
-  catalogDialog.addEventListener("cancel", (event) => {
-    if (!catalogMenu.hidden) {
-      event.preventDefault();
-      hideCatalogMenu();
-    }
-  });
-  catalogDialog.addEventListener("close", hideCatalogMenu);
-  catalogList.addEventListener("scroll", hideCatalogMenu, { passive: true });
   document.querySelector("#add-book").addEventListener("click", () => openBookDialog(null));
   for (const swatch of document.querySelectorAll("#book-colors .swatch")) {
     swatch.addEventListener("click", () => selectColor(swatch.dataset.color));
