@@ -65,6 +65,13 @@ pub struct BookList {
     pub count: i64,
 }
 
+#[derive(Debug, Clone, Copy)]
+pub enum CatalogSort {
+    Name,
+    NameDesc,
+    Added,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ShelfCounts {
@@ -380,16 +387,16 @@ impl Library {
         self.move_named("lists", id, direction)
     }
 
-    pub fn sort_category(&self, by_name: bool) -> Result<(), DbError> {
-        self.sort_named("categories", by_name)
+    pub fn sort_category(&self, sort: CatalogSort) -> Result<(), DbError> {
+        self.sort_named("categories", sort)
     }
 
-    pub fn sort_tag(&self, by_name: bool) -> Result<(), DbError> {
-        self.sort_named("tags", by_name)
+    pub fn sort_tag(&self, sort: CatalogSort) -> Result<(), DbError> {
+        self.sort_named("tags", sort)
     }
 
-    pub fn sort_list(&self, by_name: bool) -> Result<(), DbError> {
-        self.sort_named("lists", by_name)
+    pub fn sort_list(&self, sort: CatalogSort) -> Result<(), DbError> {
+        self.sort_named("lists", sort)
     }
 
     fn insert_named(&self, table: &str, name: &str, kind: UniqueKind) -> Result<NameCount, DbError> {
@@ -449,11 +456,11 @@ impl Library {
         self.write_positions(table, &ids)
     }
 
-    fn sort_named(&self, table: &str, by_name: bool) -> Result<(), DbError> {
-        let order = if by_name {
-            "name COLLATE NOCASE, id"
-        } else {
-            "id"
+    fn sort_named(&self, table: &str, sort: CatalogSort) -> Result<(), DbError> {
+        let order = match sort {
+            CatalogSort::Name => "name COLLATE NOCASE ASC, id ASC",
+            CatalogSort::NameDesc => "name COLLATE NOCASE DESC, id DESC",
+            CatalogSort::Added => "id ASC",
         };
         let ids = {
             let mut stmt = self
@@ -1473,7 +1480,7 @@ mod tests {
         library.create_category("Zebra").unwrap();
         library.create_category("Alpha").unwrap();
         library.create_category("Middle").unwrap();
-        library.sort_category(true).unwrap();
+        library.sort_category(CatalogSort::Name).unwrap();
         let names = |items: Vec<NameCount>| {
             items.into_iter().map(|item| item.name).collect::<Vec<_>>()
         };
@@ -1481,7 +1488,12 @@ mod tests {
             names(library.categories().unwrap()),
             vec!["Alpha", "Middle", "Zebra"]
         );
-        library.sort_category(false).unwrap();
+        library.sort_category(CatalogSort::NameDesc).unwrap();
+        assert_eq!(
+            names(library.categories().unwrap()),
+            vec!["Zebra", "Middle", "Alpha"]
+        );
+        library.sort_category(CatalogSort::Added).unwrap();
         assert_eq!(
             names(library.categories().unwrap()),
             vec!["Zebra", "Alpha", "Middle"]
@@ -1489,7 +1501,7 @@ mod tests {
 
         library.create_list("Weekend").unwrap();
         library.create_list("Later").unwrap();
-        library.sort_list(true).unwrap();
+        library.sort_list(CatalogSort::Name).unwrap();
         assert_eq!(
             library
                 .lists()
@@ -1499,7 +1511,17 @@ mod tests {
                 .collect::<Vec<_>>(),
             vec!["Later".to_string(), "Weekend".to_string()]
         );
-        library.sort_list(false).unwrap();
+        library.sort_list(CatalogSort::NameDesc).unwrap();
+        assert_eq!(
+            library
+                .lists()
+                .unwrap()
+                .into_iter()
+                .map(|list| list.name)
+                .collect::<Vec<_>>(),
+            vec!["Weekend".to_string(), "Later".to_string()]
+        );
+        library.sort_list(CatalogSort::Added).unwrap();
         assert_eq!(
             library
                 .lists()

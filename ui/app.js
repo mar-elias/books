@@ -67,6 +67,7 @@ const catalogStatus = document.querySelector("#catalog-status");
 let catalogKind = null;
 let catalogSelection = null;
 let catalogBusy = false;
+let catalogSortMode = "";
 
 const CATALOGS = {
   category: {
@@ -1073,6 +1074,7 @@ function askConfirm(title, message, confirm) {
 function openCatalog(kind) {
   catalogKind = kind;
   catalogSelection = null;
+  catalogSortMode = "";
   catalogStatus.textContent = "";
   renderCatalog();
   if (!catalogDialog.open) catalogDialog.showModal();
@@ -1082,12 +1084,12 @@ function renderCatalog() {
   const spec = CATALOGS[catalogKind];
   if (!spec) return;
   const scrollTop = catalogList.scrollTop;
-  document.querySelector("#catalog-title").textContent = spec.title;
+  const items = spec.items();
+  document.querySelector("#catalog-title").textContent = `${spec.title} (${items.length})`;
   document.querySelector("#catalog-add").setAttribute("aria-label", spec.addLabel);
   catalogList.replaceChildren();
   catalogList.setAttribute("role", "listbox");
   catalogList.setAttribute("aria-label", spec.title);
-  const items = spec.items();
   if (items.length === 0) {
     const empty = document.createElement("p");
     empty.className = "catalog-empty";
@@ -1132,14 +1134,25 @@ function selectedCatalogItem() {
   return spec.items().find((item) => item.id === catalogSelection) || null;
 }
 
-function nextCatalogSort(items) {
-  if (items.length < 2) return "name";
+function sameCatalogOrder(items, sorted) {
+  return sorted.every((item, index) => item.id === items[index].id);
+}
+
+function detectCatalogSort(items) {
+  if (items.length < 2) return "";
   const byName = items.slice().sort((a, b) => {
     const compared = a.name.localeCompare(b.name, undefined, { sensitivity: "base" });
     return compared || a.id - b.id;
   });
-  const alreadyNamed = byName.every((item, index) => item.id === items[index].id);
-  return alreadyNamed ? "added" : "name";
+  if (sameCatalogOrder(items, byName)) return "name";
+  const byNameDesc = items.slice().sort((a, b) => {
+    const compared = b.name.localeCompare(a.name, undefined, { sensitivity: "base" });
+    return compared || b.id - a.id;
+  });
+  if (sameCatalogOrder(items, byNameDesc)) return "name-desc";
+  const byAdded = items.slice().sort((a, b) => a.id - b.id);
+  if (sameCatalogOrder(items, byAdded)) return "added";
+  return "";
 }
 
 function updateCatalogButtons() {
@@ -1152,11 +1165,9 @@ function updateCatalogButtons() {
   document.querySelector("#catalog-rename").disabled = catalogBusy || none;
   document.querySelector("#catalog-delete").disabled = catalogBusy || none;
   const sort = document.querySelector("#catalog-sort");
-  const mode = nextCatalogSort(items);
+  const chosen = sort.value;
   sort.disabled = catalogBusy || items.length < 2;
-  sort.dataset.mode = mode;
-  sort.textContent = mode === "name" ? "A–Z" : "Added";
-  sort.setAttribute("aria-label", mode === "name" ? "Sort alphabetically" : "Sort by date added");
+  sort.value = catalogBusy && chosen ? chosen : (catalogSortMode || detectCatalogSort(items));
 }
 
 async function runCatalog(task) {
@@ -1182,6 +1193,7 @@ async function addCatalogItem() {
   try {
     const created = await invoke(spec.create, { name });
     catalogSelection = created.id;
+    catalogSortMode = "";
     catalogStatus.textContent = "";
     await reload();
   } catch (error) {
@@ -1197,6 +1209,7 @@ async function renameCatalogItem() {
   if (name == null) return;
   try {
     await invoke(spec.rename, { id: item.id, name });
+    catalogSortMode = "";
     if (catalogKind === "list") {
       if (viewState.kind === "list" && viewState.id === item.id) viewState.name = name.trim();
     } else if (viewState.kind === catalogKind && viewState.name === item.name) {
@@ -1221,6 +1234,7 @@ async function removeCatalogItem() {
   try {
     await invoke(spec.remove, { id: item.id });
     catalogSelection = neighbor && neighbor.id !== item.id ? neighbor.id : null;
+    catalogSortMode = "";
     if (catalogKind === "list") {
       if (viewState.kind === "list" && viewState.id === item.id) viewState.kind = "all";
     } else if (viewState.kind === catalogKind && viewState.name === item.name) {
@@ -1241,6 +1255,7 @@ async function moveCatalogItem(direction) {
   if (index < 0 || index + direction < 0 || index + direction >= items.length) return;
   try {
     await invoke(spec.move, { id: catalogSelection, direction });
+    catalogSortMode = "";
     catalogStatus.textContent = "";
     await reload();
   } catch (error) {
@@ -1248,11 +1263,12 @@ async function moveCatalogItem(direction) {
   }
 }
 
-async function sortCatalogItems() {
+async function sortCatalogItems(mode) {
   const spec = CATALOGS[catalogKind];
-  const mode = document.querySelector("#catalog-sort").dataset.mode || "name";
+  if (!spec || !mode) return;
   try {
     await invoke(spec.sort, { mode });
+    catalogSortMode = mode;
     catalogStatus.textContent = "";
     await reload();
   } catch (error) {
@@ -1326,8 +1342,10 @@ function bind() {
   document.querySelector("#catalog-down").addEventListener("click", () => {
     runCatalog(() => moveCatalogItem(1)).catch(catalogError);
   });
-  document.querySelector("#catalog-sort").addEventListener("click", () => {
-    runCatalog(() => sortCatalogItems()).catch(catalogError);
+  document.querySelector("#catalog-sort").addEventListener("change", () => {
+    const mode = document.querySelector("#catalog-sort").value;
+    if (!mode) return;
+    runCatalog(() => sortCatalogItems(mode)).catch(catalogError);
   });
   document.querySelector("#catalog-rename").addEventListener("click", () => {
     runCatalog(() => renameCatalogItem()).catch(catalogError);

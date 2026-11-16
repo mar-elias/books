@@ -226,20 +226,28 @@
           <h2 id="catalog-title">Categories</h2>
           <button id="catalog-add" class="text icon" type="button" aria-label="Add">+</button>
         </div>
+        <label class="catalog-sort">Sort by
+          <select id="catalog-sort">
+            <option value="name">Alphabetically</option>
+            <option value="name-desc">Alphabetically reverse</option>
+            <option value="added">Date added</option>
+          </select>
+        </label>
         <div id="catalog-list"></div>
         <p id="catalog-status"></p>
         <div class="dialog-actions">
-          <button id="catalog-up" type="button" aria-label="Move up">
-            <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true">
-              <path fill="currentColor" d="M8 3.2 2.8 10.2h10.4L8 3.2Z" />
-            </svg>
-          </button>
-          <button id="catalog-down" type="button" aria-label="Move down">
-            <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true">
-              <path fill="currentColor" d="M8 12.8 13.2 5.8H2.8L8 12.8Z" />
-            </svg>
-          </button>
-          <button id="catalog-sort" type="button">A–Z</button>
+          <span class="catalog-reorder">
+            <button id="catalog-up" type="button" aria-label="Move up">
+              <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true">
+                <path fill="currentColor" d="M8 3.2 2.8 10.2h10.4L8 3.2Z" />
+              </svg>
+            </button>
+            <button id="catalog-down" type="button" aria-label="Move down">
+              <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true">
+                <path fill="currentColor" d="M8 12.8 13.2 5.8H2.8L8 12.8Z" />
+              </svg>
+            </button>
+          </span>
           <button id="catalog-rename" type="button" disabled>Rename</button>
           <button id="catalog-delete" type="button" disabled>Delete</button>
           <span class="dialog-actions-end">

@@ -1054,13 +1054,42 @@ dialog input[type="text"], dialog textarea { width: 100%; box-sizing: border-box
 
 .catalog-head h2 { margin: 0; }
 
+#catalog-dialog .catalog-sort {
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+  width: fit-content;
+  margin-top: 14px;
+  color: var(--muted);
+}
+
+.catalog-sort select {
+  height: 32px;
+  min-width: 190px;
+  appearance: none;
+  border: 1px solid var(--line);
+  background-color: var(--sheet);
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12'%3E%3Cpath fill='%23241f1a' d='M2.2 4.2h7.6L6 9.1z'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 8px center;
+  background-size: 10px 10px;
+  padding: 0 28px 0 10px;
+  color: var(--ink);
+  cursor: pointer;
+}
+
+.catalog-sort select:disabled {
+  color: var(--muted);
+  cursor: default;
+}
+
 #catalog-list {
   display: flex;
   flex-direction: column;
   gap: 2px;
   min-height: 340px;
   max-height: min(560px, 70vh);
-  margin-top: 14px;
+  margin-top: 10px;
   overflow: auto;
   border: 1px solid var(--line);
   background: var(--sheet);
@@ -1102,11 +1131,18 @@ dialog input[type="text"], dialog textarea { width: 100%; box-sizing: border-box
 
 .catalog-row.selected .count { color: #fff; }
 
-#catalog-sort, #catalog-rename, #catalog-delete {
+#catalog-rename, #catalog-delete {
   height: 32px;
 }
 
 #catalog-delete { color: var(--danger); }
+
+.catalog-reorder {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  margin-right: 6px;
+}
 
 #catalog-up, #catalog-down {
   display: inline-flex;
@@ -1118,6 +1154,31 @@ dialog input[type="text"], dialog textarea { width: 100%; box-sizing: border-box
 }
 
 #catalog-up svg, #catalog-down svg { display: block; }
+
+#catalog-dialog button {
+  transition: background 120ms ease, border-color 120ms ease, color 120ms ease;
+}
+
+#catalog-add:hover {
+  background: rgba(36, 31, 26, 0.08);
+  border-radius: 8px;
+}
+
+#catalog-up:hover:not(:disabled),
+#catalog-down:hover:not(:disabled),
+#catalog-rename:hover:not(:disabled) {
+  background: #dddddd;
+}
+
+#catalog-delete:hover:not(:disabled) {
+  background: #f3d6d3;
+  border-color: var(--danger);
+}
+
+#catalog-close:hover {
+  background: #326d51;
+  border-color: #326d51;
+}
 
 #catalog-dialog button:disabled {
   color: var(--muted);

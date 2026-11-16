@@ -430,22 +430,22 @@ pub fn move_list(state: State<AppState>, id: i64, direction: i32) -> Result<(), 
 
 #[tauri::command]
 pub fn sort_category(state: State<AppState>, mode: String) -> Result<(), String> {
-    sort_catalog(&state, "category", &mode, |library, by_name| {
-        library.sort_category(by_name)
+    sort_catalog(&state, "category", &mode, |library, sort| {
+        library.sort_category(sort)
     })
 }
 
 #[tauri::command]
 pub fn sort_tag(state: State<AppState>, mode: String) -> Result<(), String> {
-    sort_catalog(&state, "tag", &mode, |library, by_name| {
-        library.sort_tag(by_name)
+    sort_catalog(&state, "tag", &mode, |library, sort| {
+        library.sort_tag(sort)
     })
 }
 
 #[tauri::command]
 pub fn sort_list(state: State<AppState>, mode: String) -> Result<(), String> {
-    sort_catalog(&state, "list", &mode, |library, by_name| {
-        library.sort_list(by_name)
+    sort_catalog(&state, "list", &mode, |library, sort| {
+        library.sort_list(sort)
     })
 }
 
@@ -487,14 +487,19 @@ fn sort_catalog(
     state: &AppState,
     label: &str,
     mode: &str,
-    action: impl FnOnce(&Library, bool) -> Result<(), db::DbError>,
+    action: impl FnOnce(&Library, db::CatalogSort) -> Result<(), db::DbError>,
 ) -> Result<(), String> {
-    let by_name = match mode {
-        "name" => true,
-        "added" => false,
-        _ => return Err("Choose alphabetical or date added.".to_string()),
+    let sort = match mode {
+        "name" => db::CatalogSort::Name,
+        "name-desc" => db::CatalogSort::NameDesc,
+        "added" => db::CatalogSort::Added,
+        _ => {
+            return Err(
+                "Choose alphabetical, reverse alphabetical, or date added.".to_string(),
+            );
+        }
     };
-    change_catalog(state, label, |library| action(library, by_name))
+    change_catalog(state, label, |library| action(library, sort))
 }
 
 #[tauri::command]
