@@ -1024,9 +1024,12 @@ dialog input[type="text"], dialog textarea { width: 100%; box-sizing: border-box
   display: flex;
   justify-content: flex-end;
   align-items: center;
+  flex-wrap: wrap;
   gap: 8px;
   margin-top: 16px;
 }
+
+#catalog-dialog .dialog-actions { flex: none; }
 
 .dialog-actions-end {
   display: flex;
@@ -1056,7 +1059,19 @@ dialog input[type="text"], dialog textarea { width: 100%; box-sizing: border-box
 
 #catalog-dialog {
   width: min(500px, calc(100% - 32px));
-  overflow: visible;
+  max-height: calc(100% - 32px);
+}
+
+#catalog-dialog[open] {
+  display: flex;
+  flex-direction: column;
+}
+
+#catalog-form {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
 }
 
 .catalog-head {
@@ -1101,8 +1116,9 @@ dialog input[type="text"], dialog textarea { width: 100%; box-sizing: border-box
   display: flex;
   flex-direction: column;
   gap: 2px;
-  min-height: 340px;
-  max-height: min(560px, 70vh);
+  flex: 1 1 auto;
+  min-height: 0;
+  max-height: 560px;
   margin-top: 10px;
   overflow: auto;
   border: 1px solid var(--line);
@@ -1148,6 +1164,8 @@ dialog input[type="text"], dialog textarea { width: 100%; box-sizing: border-box
 .catalog-color {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
+  flex: none;
   gap: 12px;
   margin-top: 12px;
 }
