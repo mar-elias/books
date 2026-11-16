@@ -35,6 +35,7 @@ pub struct BookForm {
     pub tags: String,
     pub color: String,
     pub notes: String,
+    pub notes_path: String,
     pub rating: String,
 }
 
@@ -113,6 +114,7 @@ pub fn form_to_draft(form: BookForm, keep_cover: Option<Vec<u8>>) -> Result<Draf
     let author = form.author.trim().to_string();
     let color = parse_color(&form.color)?;
     let notes = form.notes.trim().to_string();
+    let notes_path = notes_file(&form.notes_path)?;
     let rating = parse_rating(&form.rating)?;
     let cover = cover_bytes(&form.cover_path, &file_path, &title, &author, keep_cover)?;
     Ok(Draft {
@@ -126,8 +128,22 @@ pub fn form_to_draft(form: BookForm, keep_cover: Option<Vec<u8>>) -> Result<Draf
         cover_png: cover,
         color,
         notes,
+        notes_path,
         rating,
     })
+}
+
+fn notes_file(value: &str) -> Result<String, String> {
+    let text = value.trim();
+    if text.is_empty() {
+        return Ok(String::new());
+    }
+    let path = PathBuf::from(text);
+    if path.is_file() {
+        Ok(path.to_string_lossy().into_owned())
+    } else {
+        Err("That notes file is missing.".to_string())
+    }
 }
 
 fn parse_rating(value: &str) -> Result<Option<i32>, String> {
@@ -730,6 +746,7 @@ mod tests {
             tags: "unread".to_string(),
             color: String::new(),
             notes: String::new(),
+            notes_path: String::new(),
             rating: String::new(),
         }
     }
@@ -814,6 +831,31 @@ mod tests {
         let untitled = form_to_draft(form("  ", "", "  ", "  "), None).unwrap();
         assert_eq!(untitled.title, "Untitled");
         assert_eq!(untitled.file_path, "");
+    }
+
+    #[test]
+    fn notes_path_must_point_at_a_file() {
+        let mut blank = form("Notes", "", "", "");
+        blank.notes_path = "   ".to_string();
+        assert_eq!(form_to_draft(blank, None).unwrap().notes_path, "");
+
+        let mut missing = form("Notes", "", "", "");
+        missing.notes_path = "/no/such/notes.txt".to_string();
+        assert_eq!(
+            form_to_draft(missing, None).unwrap_err(),
+            "That notes file is missing."
+        );
+
+        let dir = temp_dir();
+        let notes = dir.join("comments.txt");
+        std::fs::write(&notes, b"hello").unwrap();
+        let mut item = form("Notes", "", "", "");
+        item.notes_path = format!("  {}  ", notes.display());
+        assert_eq!(
+            form_to_draft(item, None).unwrap().notes_path,
+            notes.to_string_lossy()
+        );
+        let _ = std::fs::remove_dir_all(dir);
     }
 
     #[test]

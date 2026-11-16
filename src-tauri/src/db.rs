@@ -19,6 +19,7 @@ pub struct Book {
     pub list_ids: Vec<i64>,
     pub color: String,
     pub notes: String,
+    pub notes_path: String,
     pub added_at: Option<String>,
     pub modified_at: Option<String>,
     pub rating: Option<i32>,
@@ -37,6 +38,7 @@ pub struct Draft {
     pub cover_png: Vec<u8>,
     pub color: String,
     pub notes: String,
+    pub notes_path: String,
     pub rating: Option<i32>,
 }
 
@@ -146,8 +148,8 @@ impl Library {
         let tx = self.conn.unchecked_transaction()?;
         let stamp = now_utc();
         let insert = tx.execute(
-            "INSERT INTO books (title, author, year, file_path, format, color, notes, added_at, modified_at, rating)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
+            "INSERT INTO books (title, author, year, file_path, format, color, notes, notes_path, added_at, modified_at, rating)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)",
             params![
                 draft.title,
                 draft.author,
@@ -156,6 +158,7 @@ impl Library {
                 none_if_empty(&draft.format),
                 none_if_empty(&draft.color),
                 none_if_empty(&draft.notes),
+                none_if_empty(&draft.notes_path),
                 &stamp,
                 &stamp,
                 draft.rating
@@ -181,8 +184,8 @@ impl Library {
         let updated = tx.execute(
             "UPDATE books
              SET title = ?1, author = ?2, year = ?3, file_path = ?4, format = ?5, color = ?6, notes = ?7,
-                 modified_at = ?8, rating = ?9
-             WHERE id = ?10",
+                 notes_path = ?8, modified_at = ?9, rating = ?10
+             WHERE id = ?11",
             params![
                 draft.title,
                 draft.author,
@@ -191,6 +194,7 @@ impl Library {
                 none_if_empty(&draft.format),
                 none_if_empty(&draft.color),
                 none_if_empty(&draft.notes),
+                none_if_empty(&draft.notes_path),
                 now_utc(),
                 draft.rating,
                 id
@@ -233,7 +237,7 @@ impl Library {
 
     pub fn book(&self, id: i64) -> Result<Option<Book>, DbError> {
         let mut stmt = self.conn.prepare(
-            "SELECT id, title, author, year, file_path, format, cover_path, color, notes, added_at, modified_at, rating
+            "SELECT id, title, author, year, file_path, format, cover_path, color, notes, added_at, modified_at, rating, notes_path
              FROM books WHERE id = ?1",
         )?;
         let row = stmt
@@ -253,7 +257,7 @@ impl Library {
         let rows = match scope {
             BookScope::All => {
                 stmt = self.conn.prepare(
-                    "SELECT id, title, author, year, file_path, format, cover_path, color, notes, added_at, modified_at, rating
+                    "SELECT id, title, author, year, file_path, format, cover_path, color, notes, added_at, modified_at, rating, notes_path
                      FROM books
                      ORDER BY title COLLATE NOCASE, id",
                 )?;
@@ -261,7 +265,7 @@ impl Library {
             }
             BookScope::Author(author) => {
                 stmt = self.conn.prepare(
-                    "SELECT id, title, author, year, file_path, format, cover_path, color, notes, added_at, modified_at, rating
+                    "SELECT id, title, author, year, file_path, format, cover_path, color, notes, added_at, modified_at, rating, notes_path
                      FROM books
                      WHERE author = ?1
                      ORDER BY title COLLATE NOCASE, id",
@@ -271,7 +275,7 @@ impl Library {
             }
             BookScope::Category(name) => {
                 stmt = self.conn.prepare(
-                    "SELECT b.id, b.title, b.author, b.year, b.file_path, b.format, b.cover_path, b.color, b.notes, b.added_at, b.modified_at, b.rating
+                    "SELECT b.id, b.title, b.author, b.year, b.file_path, b.format, b.cover_path, b.color, b.notes, b.added_at, b.modified_at, b.rating, b.notes_path
                      FROM books b
                      JOIN book_categories bc ON bc.book_id = b.id
                      JOIN categories c ON c.id = bc.category_id
@@ -283,7 +287,7 @@ impl Library {
             }
             BookScope::Tag(name) => {
                 stmt = self.conn.prepare(
-                    "SELECT b.id, b.title, b.author, b.year, b.file_path, b.format, b.cover_path, b.color, b.notes, b.added_at, b.modified_at, b.rating
+                    "SELECT b.id, b.title, b.author, b.year, b.file_path, b.format, b.cover_path, b.color, b.notes, b.added_at, b.modified_at, b.rating, b.notes_path
                      FROM books b
                      JOIN book_tags bt ON bt.book_id = b.id
                      JOIN tags t ON t.id = bt.tag_id
@@ -295,7 +299,7 @@ impl Library {
             }
             BookScope::List(list_id) => {
                 stmt = self.conn.prepare(
-                    "SELECT b.id, b.title, b.author, b.year, b.file_path, b.format, b.cover_path, b.color, b.notes, b.added_at, b.modified_at, b.rating
+                    "SELECT b.id, b.title, b.author, b.year, b.file_path, b.format, b.cover_path, b.color, b.notes, b.added_at, b.modified_at, b.rating, b.notes_path
                      FROM books b
                      JOIN list_books lb ON lb.book_id = b.id
                      WHERE lb.list_id = ?1
@@ -605,6 +609,7 @@ impl Library {
                  cover_path TEXT,
                  color TEXT,
                  notes TEXT,
+                 notes_path TEXT,
                  added_at TEXT,
                  modified_at TEXT,
                  rating INTEGER
@@ -646,6 +651,7 @@ impl Library {
         self.allow_books_without_files()?;
         self.add_book_color()?;
         self.add_book_notes()?;
+        self.add_book_notes_path()?;
         self.add_catalog_positions()?;
         self.add_book_dates()?;
         self.add_book_rating()?;
@@ -713,6 +719,15 @@ impl Library {
             .query_map([], |row| row.get::<_, String>(1))?
             .collect::<Result<Vec<_>, _>>()?;
         Ok(names.iter().any(|name| name == column))
+    }
+
+    fn add_book_notes_path(&self) -> Result<(), DbError> {
+        if self.has_column("books", "notes_path")? {
+            return Ok(());
+        }
+        self.conn
+            .execute("ALTER TABLE books ADD COLUMN notes_path TEXT", [])?;
+        Ok(())
     }
 
     fn add_book_notes(&self) -> Result<(), DbError> {
@@ -929,6 +944,7 @@ fn map_book_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<Book> {
         added_at: row.get(9)?,
         modified_at: row.get(10)?,
         rating: row.get(11)?,
+        notes_path: row.get::<_, Option<String>>(12)?.unwrap_or_default(),
     })
 }
 
@@ -1041,6 +1057,7 @@ mod tests {
             cover_png: b"\x89PNG\r\n\x1a\nfake".to_vec(),
             color: String::new(),
             notes: String::new(),
+            notes_path: String::new(),
             rating: None,
         }
     }
@@ -1124,6 +1141,23 @@ mod tests {
     }
 
     #[test]
+    fn notes_path_is_stored_and_can_be_cleared() {
+        let (library, dir) = temp_library();
+        let mut item = pathless("Commented");
+        item.notes_path = "/notes/dune.txt".to_string();
+        let saved = library.add_book(&item).unwrap();
+        assert_eq!(saved.notes_path, "/notes/dune.txt");
+        assert_eq!(
+            library.book(saved.id).unwrap().unwrap().notes_path,
+            "/notes/dune.txt"
+        );
+        item.notes_path.clear();
+        let updated = library.update_book(saved.id, &item).unwrap();
+        assert_eq!(updated.notes_path, "");
+        let _ = fs::remove_dir_all(dir);
+    }
+
+    #[test]
     fn books_without_files_are_allowed() {
         let (library, dir) = temp_library();
         let first = library.add_book(&pathless("Notes")).unwrap();
@@ -1175,6 +1209,7 @@ mod tests {
         assert_eq!(library.books(&BookScope::All).unwrap().len(), 3);
         assert_eq!(library.books(&BookScope::All).unwrap()[0].color, "");
         assert_eq!(library.books(&BookScope::All).unwrap()[0].notes, "");
+        assert_eq!(library.books(&BookScope::All).unwrap()[0].notes_path, "");
         let _ = fs::remove_dir_all(dir);
     }
 
@@ -1505,6 +1540,7 @@ mod tests {
             list_ids: Vec::new(),
             color: String::new(),
             notes: String::new(),
+            notes_path: "/notes/dune.txt".to_string(),
             added_at: Some("2026-11-16T12:00:00.000Z".to_string()),
             modified_at: Some("2026-11-16T12:04:00.000Z".to_string()),
             rating: Some(4),
@@ -1514,6 +1550,7 @@ mod tests {
         assert_eq!(json["addedAt"], "2026-11-16T12:00:00.000Z");
         assert_eq!(json["modifiedAt"], "2026-11-16T12:04:00.000Z");
         assert_eq!(json["rating"], 4);
+        assert_eq!(json["notesPath"], "/notes/dune.txt");
         assert!(json.get("file_path").is_none());
     }
 

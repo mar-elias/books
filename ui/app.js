@@ -11,6 +11,7 @@ let coverVersion = 0;
 let toastTimer = 0;
 let editingId = null;
 let editingTitle = "";
+let editingFilePath = "";
 let editingListIds = [];
 let selectedBookId = null;
 const authorSort = {
@@ -31,6 +32,7 @@ const ZOOM_WIDTHS = [112, 136, 160, 192, 232, 280, 336];
 const ZOOM_DEFAULT = 2;
 const ZOOM_KEY = "books-zoom";
 const SORT_KEY = "books-sort";
+const SIDEBAR_KEY = "books-sidebar";
 const BOOK_SORTS = new Set([
   "title",
   "added-desc",
@@ -43,6 +45,7 @@ const BOOK_SORTS = new Set([
 const SORT_ALIASES = { newest: "added-desc", oldest: "added-asc" };
 let zoomLevel = storedZoom();
 let bookSort = storedBookSort();
+const sidebarOpen = storedSidebar();
 
 const libraryNav = document.querySelector("#library-nav");
 const categoryNav = document.querySelector("#category-nav");
@@ -151,6 +154,43 @@ function storedBookSort() {
     /* keep alphabetical order when storage is unavailable */
   }
   return "title";
+}
+
+function storedSidebar() {
+  const open = { category: true, tag: true };
+  try {
+    const raw = localStorage.getItem(SIDEBAR_KEY);
+    if (!raw) return open;
+    const stored = JSON.parse(raw);
+    if (stored && typeof stored === "object") {
+      if (stored.category === false) open.category = false;
+      if (stored.tag === false) open.tag = false;
+    }
+  } catch (_error) {
+    /* keep both sections open when storage is unavailable */
+  }
+  return open;
+}
+
+function sidebarNav(kind) {
+  return kind === "category" ? categoryNav : tagNav;
+}
+
+function applySidebarSection(kind) {
+  const open = sidebarOpen[kind];
+  sidebarNav(kind).hidden = !open;
+  const toggle = document.querySelector(kind === "category" ? "#toggle-categories" : "#toggle-tags");
+  toggle.setAttribute("aria-expanded", open ? "true" : "false");
+}
+
+function setSidebarOpen(kind, open) {
+  sidebarOpen[kind] = open;
+  try {
+    localStorage.setItem(SIDEBAR_KEY, JSON.stringify(sidebarOpen));
+  } catch (_error) {
+    /* the fold still applies for this visit */
+  }
+  applySidebarSection(kind);
 }
 
 function setBookSort(next) {
@@ -563,6 +603,21 @@ function clearBookSelection() {
   }
 }
 
+function notesMark() {
+  const mark = document.createElement("span");
+  mark.className = "notes-mark";
+  mark.setAttribute("aria-label", "Notes");
+  const icon = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+  icon.setAttribute("viewBox", "0 0 16 16");
+  icon.setAttribute("aria-hidden", "true");
+  const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
+  path.setAttribute("fill", "currentColor");
+  path.setAttribute("d", "M3.2 2.2h9.6v11.6H3.2V2.2Zm1.6 2.4h6.4v1.2H4.8V4.6Zm0 2.4h6.4v1.2H4.8V7Zm0 2.4h4.2v1.2H4.8V9.4Z");
+  icon.append(path);
+  mark.append(icon);
+  return mark;
+}
+
 function ratingMark(score) {
   const mark = document.createElement("span");
   mark.className = "rating-mark";
@@ -605,6 +660,7 @@ function bookTile(book) {
   if (BOOK_COLORS.has(book.color)) label.style.backgroundColor = book.color;
   title.append(label);
   frame.append(image, badge);
+  if (book.notesPath && book.notesPath.trim()) frame.append(notesMark());
   if (score != null) frame.append(ratingMark(score));
   article.append(frame, title);
   article.addEventListener("click", () => selectBook(book.id));
@@ -787,14 +843,17 @@ function editBook(book) {
 function openBookDialog(book) {
   editingId = book ? book.id : null;
   editingTitle = book ? book.title : "";
+  editingFilePath = book && book.filePath ? book.filePath : "";
   editingListIds = book && book.listIds ? book.listIds.map(Number) : [];
   document.querySelector("#book-dialog-title").textContent = book ? "Edit book" : "Add book";
   document.querySelector("#book-delete").hidden = !book;
-  document.querySelector("#field-file").value = book ? book.filePath : "";
+  document.querySelector("#field-file").value = "";
+  document.querySelector("#field-file").placeholder = "Can be left empty, otherwise must be a valid path";
   document.querySelector("#field-cover").value = "";
   document.querySelector("#field-cover").placeholder = book
     ? "Leave empty to keep this cover"
     : "Leave empty to use the first page";
+  document.querySelector("#field-notes-path").value = book && book.notesPath ? book.notesPath : "";
   document.querySelector("#field-title").value = book ? book.title : "";
   document.querySelector("#field-author").value = book ? book.author : "";
   document.querySelector("#field-year").value = book && book.year != null ? String(book.year) : "";
@@ -820,18 +879,26 @@ function openBookDialog(book) {
     lists.map((item) => ({ value: String(item.id), label: item.name })),
     editingListIds.map(String),
   );
+  const frame = document.querySelector("#cover-preview-frame");
   const preview = document.querySelector("#cover-preview");
   if (book) {
-    preview.hidden = false;
+    frame.hidden = false;
     preview.src = coverSrc(book.id);
     preview.alt = book.title;
   } else {
-    preview.hidden = true;
+    frame.hidden = true;
     preview.removeAttribute("src");
     preview.alt = "";
   }
+  syncNotesPreview();
   document.querySelector("#book-status").textContent = "";
   bookDialog.showModal();
+}
+
+function syncNotesPreview() {
+  const frame = document.querySelector("#cover-preview-frame");
+  const path = document.querySelector("#field-notes-path").value.trim();
+  document.querySelector("#notes-preview").hidden = frame.hidden || path.length === 0;
 }
 
 async function saveBook(event) {
@@ -839,12 +906,14 @@ async function saveBook(event) {
   const save = document.querySelector("#book-save");
   const status = document.querySelector("#book-status");
   save.disabled = true;
+  const filePath = document.querySelector("#field-file").value;
   const draft = {
     title: document.querySelector("#field-title").value,
     author: document.querySelector("#field-author").value,
     year: document.querySelector("#field-year").value,
-    filePath: document.querySelector("#field-file").value,
+    filePath: filePath.trim() ? filePath : editingFilePath,
     coverPath: document.querySelector("#field-cover").value,
+    notesPath: document.querySelector("#field-notes-path").value,
     categories: chosenValues(document.querySelector("#category-picker")).join(", "),
     tags: chosenValues(document.querySelector("#tag-picker")).join(", "),
     color: chosenColor(),
@@ -1231,6 +1300,14 @@ async function saveSettings() {
 
 function bind() {
   applyZoom();
+  applySidebarSection("category");
+  applySidebarSection("tag");
+  document.querySelector("#toggle-categories").addEventListener("click", () => {
+    setSidebarOpen("category", !sidebarOpen.category);
+  });
+  document.querySelector("#toggle-tags").addEventListener("click", () => {
+    setSidebarOpen("tag", !sidebarOpen.tag);
+  });
   const bookSortControl = document.querySelector("#book-sort");
   bookSortControl.value = bookSort;
   bookSortControl.addEventListener("change", () => setBookSort(bookSortControl.value));
@@ -1286,6 +1363,7 @@ function bind() {
   document.addEventListener("click", (event) => {
     if (!event.target.closest(".picker")) closePickers();
   });
+  document.querySelector("#field-notes-path").addEventListener("input", syncNotesPreview);
   document.querySelector("#book-form").addEventListener("submit", (event) => {
     saveBook(event).catch((error) => {
       document.querySelector("#book-status").textContent = errorText(error);

@@ -148,6 +148,34 @@ aside {
 
 .section-row .section { margin: 0 0 0 12px; }
 
+.section-toggle {
+  display: flex;
+  align-items: center;
+  align-self: stretch;
+  gap: 6px;
+  flex: 1;
+  min-width: 0;
+  background: transparent;
+  border: 0;
+  padding: 2px 4px 2px 8px;
+  text-align: left;
+}
+
+.section-toggle .section { margin: 0; }
+
+.section-chevron {
+  flex: none;
+  display: block;
+  transform-origin: center;
+  transition: transform 120ms ease;
+}
+
+.section-toggle[aria-expanded="false"] .section-chevron {
+  transform: rotate(-90deg);
+}
+
+.section-toggle:hover { background: rgba(36, 31, 26, 0.08); }
+
 button.icon {
   display: inline-flex;
   align-items: center;
@@ -485,6 +513,22 @@ input[type="search"] { width: 220px; }
 }
 
 .rating-mark svg { display: block; width: 1em; height: 1em; }
+
+.notes-mark {
+  position: absolute;
+  left: 6px;
+  bottom: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: calc(var(--book-width) * 0.15);
+  height: calc(var(--book-width) * 0.15);
+  background: rgba(36, 31, 26, 0.82);
+  color: var(--accent-ink);
+  pointer-events: none;
+}
+
+.notes-mark svg { display: block; width: 68%; height: 68%; }
 
 .book-title {
   margin: 8px 0 0;
@@ -941,14 +985,25 @@ dialog input[type="text"], dialog textarea { width: 100%; box-sizing: border-box
   text-overflow: ellipsis;
 }
 
-#cover-preview {
-  display: block;
+#cover-preview-frame {
+  position: relative;
   width: 120px;
   height: 180px;
   margin-top: 12px;
-  object-fit: contain;
   background: var(--sheet);
   box-shadow: var(--shadow);
+}
+
+#cover-preview-frame .notes-mark {
+  width: 22px;
+  height: 22px;
+}
+
+#cover-preview {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
 }
 
 .dialog-actions {
@@ -969,6 +1024,20 @@ dialog input[type="text"], dialog textarea { width: 100%; box-sizing: border-box
   background: #aa2e24;
   border-color: var(--danger);
   color: var(--accent-ink);
+}
+
+#book-cancel:hover {
+  background: #dddddd;
+}
+
+#book-save:hover:not(:disabled) {
+  background: #326d51;
+  border-color: #326d51;
+}
+
+#book-delete:hover {
+  background: #a03127;
+  border-color: #a03127;
 }
 
 #catalog-dialog {

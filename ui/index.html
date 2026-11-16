@@ -14,12 +14,22 @@
         <p class="section"><b>Library</b></p>
         <nav id="library-nav" aria-label="Library"></nav>
         <div class="section-row">
-          <p class="section"><b>Categories</b></p>
+          <button id="toggle-categories" class="section-toggle" type="button" aria-expanded="true" aria-controls="category-nav">
+            <svg class="section-chevron" viewBox="0 0 16 16" width="10" height="10" aria-hidden="true">
+              <path fill="currentColor" d="M3.4 5.6 8 10.8 12.6 5.6Z" />
+            </svg>
+            <span class="section"><b>Categories</b></span>
+          </button>
           <button id="manage-categories" class="text icon hint" type="button" data-hint="Edit" aria-label="Manage categories">···</button>
         </div>
         <nav id="category-nav" aria-label="Categories"></nav>
         <div class="section-row">
-          <p class="section"><b>Tags</b></p>
+          <button id="toggle-tags" class="section-toggle" type="button" aria-expanded="true" aria-controls="tag-nav">
+            <svg class="section-chevron" viewBox="0 0 16 16" width="10" height="10" aria-hidden="true">
+              <path fill="currentColor" d="M3.4 5.6 8 10.8 12.6 5.6Z" />
+            </svg>
+            <span class="section"><b>Tags</b></span>
+          </button>
           <button id="manage-tags" class="text icon hint" type="button" data-hint="Edit" aria-label="Manage tags">···</button>
         </div>
         <nav id="tag-nav" aria-label="Tags"></nav>
@@ -81,6 +91,7 @@
         <div class="book-fields">
           <label class="wide">Book path <input id="field-file" type="text" spellcheck="false" /></label>
           <label class="wide">Cover path <input id="field-cover" type="text" spellcheck="false" /></label>
+          <label class="wide">Notes path <input id="field-notes-path" type="text" spellcheck="false" /></label>
           <label>Title <input id="field-title" type="text" /></label>
           <label>Author <input id="field-author" type="text" /></label>
           <div class="date-fields" id="book-dates">
@@ -143,7 +154,14 @@
           </div>
           <div class="detail-row">
             <label>Notes <textarea id="field-notes" rows="7" dir="auto"></textarea></label>
-            <img id="cover-preview" alt="" hidden />
+            <div id="cover-preview-frame" hidden>
+              <img id="cover-preview" alt="" />
+              <span id="notes-preview" class="notes-mark" hidden aria-label="Notes">
+                <svg viewBox="0 0 16 16" aria-hidden="true">
+                  <path fill="currentColor" d="M3.2 2.2h9.6v11.6H3.2V2.2Zm1.6 2.4h6.4v1.2H4.8V4.6Zm0 2.4h6.4v1.2H4.8V7Zm0 2.4h4.2v1.2H4.8V9.4Z" />
+                </svg>
+              </span>
+            </div>
           </div>
         </div>
         <p id="book-status"></p>
