@@ -181,7 +181,7 @@ fn parse_color(value: &str) -> Result<String, String> {
     if BOOK_COLORS.contains(&color.as_str()) {
         Ok(color)
     } else {
-        Err("Choose one of the book colors.".to_string())
+        Err("Choose one of the colors.".to_string())
     }
 }
 
@@ -447,6 +447,26 @@ pub fn sort_list(state: State<AppState>, mode: String) -> Result<(), String> {
     sort_catalog(&state, "list", &mode, |library, sort| {
         library.sort_list(sort)
     })
+}
+
+#[tauri::command]
+pub fn set_category_color(state: State<AppState>, id: i64, color: String) -> Result<(), String> {
+    let color = parse_color(&color)?;
+    change_catalog(&state, "category", |library| {
+        library.set_category_color(id, &color)
+    })
+}
+
+#[tauri::command]
+pub fn set_tag_color(state: State<AppState>, id: i64, color: String) -> Result<(), String> {
+    let color = parse_color(&color)?;
+    change_catalog(&state, "tag", |library| library.set_tag_color(id, &color))
+}
+
+#[tauri::command]
+pub fn set_list_color(state: State<AppState>, id: i64, color: String) -> Result<(), String> {
+    let color = parse_color(&color)?;
+    change_catalog(&state, "list", |library| library.set_list_color(id, &color))
 }
 
 fn require_name(name: String, empty: &str) -> Result<String, String> {
@@ -882,7 +902,7 @@ mod tests {
         unknown.color = "#000000".to_string();
         assert_eq!(
             form_to_draft(unknown, None).unwrap_err(),
-            "Choose one of the book colors."
+            "Choose one of the colors."
         );
     }
 

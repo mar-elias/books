@@ -55,6 +55,7 @@ pub struct NameCount {
     pub id: i64,
     pub name: String,
     pub count: i64,
+    pub color: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -63,6 +64,7 @@ pub struct BookList {
     pub id: i64,
     pub name: String,
     pub count: i64,
+    pub color: String,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -399,6 +401,18 @@ impl Library {
         self.sort_named("lists", sort)
     }
 
+    pub fn set_category_color(&self, id: i64, color: &str) -> Result<(), DbError> {
+        self.set_named_color("categories", id, color)
+    }
+
+    pub fn set_tag_color(&self, id: i64, color: &str) -> Result<(), DbError> {
+        self.set_named_color("tags", id, color)
+    }
+
+    pub fn set_list_color(&self, id: i64, color: &str) -> Result<(), DbError> {
+        self.set_named_color("lists", id, color)
+    }
+
     fn insert_named(&self, table: &str, name: &str, kind: UniqueKind) -> Result<NameCount, DbError> {
         let sql = format!(
             "INSERT INTO {table} (name, position)
@@ -409,6 +423,7 @@ impl Library {
                 id: self.conn.last_insert_rowid(),
                 name: name.to_string(),
                 count: 0,
+                color: String::new(),
             }),
             Err(err) => Err(map_unique(err, kind)),
         }
@@ -429,6 +444,18 @@ impl Library {
             Ok(0) => Err(DbError::NotFound),
             Ok(_) => Ok(()),
             Err(err) => Err(map_unique(err, kind)),
+        }
+    }
+
+    fn set_named_color(&self, table: &str, id: i64, color: &str) -> Result<(), DbError> {
+        let changed = self.conn.execute(
+            &format!("UPDATE {table} SET color = ?1 WHERE id = ?2"),
+            params![none_if_empty(color), id],
+        )?;
+        if changed == 0 {
+            Err(DbError::NotFound)
+        } else {
+            Ok(())
         }
     }
 
@@ -497,14 +524,14 @@ impl Library {
     fn name_counts(&self, kind: NameKind) -> Result<Vec<NameCount>, DbError> {
         let sql = match kind {
             NameKind::Category => {
-                "SELECT c.id, c.name, COUNT(bc.book_id)
+                "SELECT c.id, c.name, COUNT(bc.book_id), c.color
                  FROM categories c
                  LEFT JOIN book_categories bc ON bc.category_id = c.id
                  GROUP BY c.id
                  ORDER BY c.position, c.id"
             }
             NameKind::Tag => {
-                "SELECT t.id, t.name, COUNT(bt.book_id)
+                "SELECT t.id, t.name, COUNT(bt.book_id), t.color
                  FROM tags t
                  LEFT JOIN book_tags bt ON bt.tag_id = t.id
                  GROUP BY t.id
@@ -518,6 +545,7 @@ impl Library {
                     id: row.get(0)?,
                     name: row.get(1)?,
                     count: row.get(2)?,
+                    color: row.get::<_, Option<String>>(3)?.unwrap_or_default(),
                 })
             })?
             .collect::<Result<Vec<_>, _>>()?;
@@ -526,7 +554,7 @@ impl Library {
 
     pub fn lists(&self) -> Result<Vec<BookList>, DbError> {
         let mut stmt = self.conn.prepare(
-            "SELECT l.id, l.name, COUNT(lb.book_id)
+            "SELECT l.id, l.name, COUNT(lb.book_id), l.color
              FROM lists l
              LEFT JOIN list_books lb ON lb.list_id = l.id
              GROUP BY l.id
@@ -538,6 +566,7 @@ impl Library {
                     id: row.get(0)?,
                     name: row.get(1)?,
                     count: row.get(2)?,
+                    color: row.get::<_, Option<String>>(3)?.unwrap_or_default(),
                 })
             })?
             .collect::<Result<Vec<_>, _>>()?;
@@ -570,6 +599,7 @@ impl Library {
             id,
             name: name.to_string(),
             count: 0,
+            color: String::new(),
         })
     }
 
@@ -624,7 +654,8 @@ impl Library {
              CREATE TABLE IF NOT EXISTS categories (
                  id INTEGER PRIMARY KEY,
                  name TEXT NOT NULL UNIQUE COLLATE NOCASE,
-                 position INTEGER NOT NULL DEFAULT 0
+                 position INTEGER NOT NULL DEFAULT 0,
+                 color TEXT
              );
              CREATE TABLE IF NOT EXISTS book_categories (
                  book_id INTEGER NOT NULL REFERENCES books(id) ON DELETE CASCADE,
@@ -634,7 +665,8 @@ impl Library {
              CREATE TABLE IF NOT EXISTS tags (
                  id INTEGER PRIMARY KEY,
                  name TEXT NOT NULL UNIQUE COLLATE NOCASE,
-                 position INTEGER NOT NULL DEFAULT 0
+                 position INTEGER NOT NULL DEFAULT 0,
+                 color TEXT
              );
              CREATE TABLE IF NOT EXISTS book_tags (
                  book_id INTEGER NOT NULL REFERENCES books(id) ON DELETE CASCADE,
@@ -644,7 +676,8 @@ impl Library {
              CREATE TABLE IF NOT EXISTS lists (
                  id INTEGER PRIMARY KEY,
                  name TEXT NOT NULL UNIQUE COLLATE NOCASE,
-                 position INTEGER NOT NULL
+                 position INTEGER NOT NULL,
+                 color TEXT
              );
              CREATE TABLE IF NOT EXISTS list_books (
                  list_id INTEGER NOT NULL REFERENCES lists(id) ON DELETE CASCADE,
@@ -662,6 +695,18 @@ impl Library {
         self.add_catalog_positions()?;
         self.add_book_dates()?;
         self.add_book_rating()?;
+        self.add_catalog_colors()?;
+        Ok(())
+    }
+
+    fn add_catalog_colors(&self) -> Result<(), DbError> {
+        for table in ["categories", "tags", "lists"] {
+            if self.has_column(table, "color")? {
+                continue;
+            }
+            self.conn
+                .execute(&format!("ALTER TABLE {table} ADD COLUMN color TEXT"), [])?;
+        }
         Ok(())
     }
 
@@ -1334,6 +1379,66 @@ mod tests {
         item.color.clear();
         let updated = library.update_book(book.id, &item).unwrap();
         assert_eq!(updated.color, "");
+        let _ = fs::remove_dir_all(dir);
+    }
+
+    #[test]
+    fn catalog_color_is_saved_and_cleared() {
+        let dir = std::env::temp_dir().join(format!(
+            "ebook-reader-catalog-color-{}-{}",
+            std::process::id(),
+            unique_suffix()
+        ));
+        let _ = fs::remove_dir_all(&dir);
+        fs::create_dir_all(&dir).unwrap();
+        let db_path = dir.join("library.db");
+        {
+            let conn = Connection::open(&db_path).unwrap();
+            conn.execute_batch(
+                "CREATE TABLE categories (
+                     id INTEGER PRIMARY KEY,
+                     name TEXT NOT NULL UNIQUE COLLATE NOCASE,
+                     position INTEGER NOT NULL DEFAULT 0
+                 );
+                 INSERT INTO categories (name, position) VALUES ('History', 0);
+                 CREATE TABLE tags (
+                     id INTEGER PRIMARY KEY,
+                     name TEXT NOT NULL UNIQUE COLLATE NOCASE,
+                     position INTEGER NOT NULL DEFAULT 0
+                 );
+                 INSERT INTO tags (name, position) VALUES ('favorite', 0);
+                 CREATE TABLE lists (
+                     id INTEGER PRIMARY KEY,
+                     name TEXT NOT NULL UNIQUE COLLATE NOCASE,
+                     position INTEGER NOT NULL
+                 );
+                 INSERT INTO lists (name, position) VALUES ('Weekend', 0);",
+            )
+            .unwrap();
+        }
+        let library = Library::open(&db_path, &dir.join("covers")).unwrap();
+        let category = &library.categories().unwrap()[0];
+        let tag = &library.tags().unwrap()[0];
+        let list = &library.lists().unwrap()[0];
+        assert_eq!(category.color, "");
+        assert_eq!(tag.color, "");
+        assert_eq!(list.color, "");
+        library.set_category_color(category.id, "#fa517e").unwrap();
+        library.set_tag_color(tag.id, "#5ea7ef").unwrap();
+        library.set_list_color(list.id, "#71c15d").unwrap();
+        assert_eq!(library.categories().unwrap()[0].color, "#fa517e");
+        assert_eq!(library.tags().unwrap()[0].color, "#5ea7ef");
+        assert_eq!(library.lists().unwrap()[0].color, "#71c15d");
+        library.set_category_color(category.id, "").unwrap();
+        library.set_tag_color(tag.id, "").unwrap();
+        library.set_list_color(list.id, "").unwrap();
+        assert_eq!(library.categories().unwrap()[0].color, "");
+        assert_eq!(library.tags().unwrap()[0].color, "");
+        assert_eq!(library.lists().unwrap()[0].color, "");
+        assert!(matches!(
+            library.set_list_color(list.id + 9, "#fa517e"),
+            Err(DbError::NotFound)
+        ));
         let _ = fs::remove_dir_all(dir);
     }
 

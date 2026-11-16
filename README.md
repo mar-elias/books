@@ -94,5 +94,5 @@ X - keep counts of books
 X - install it as an exe
 X - Show in folder option
 X - add a link to a notes file to each book. Books with notes should display an icon in the list.
-- set color to cat/tag/list
+X - set color to cat/tag/list
 X - collapse left menus

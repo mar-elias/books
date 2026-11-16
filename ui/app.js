@@ -84,6 +84,7 @@ const CATALOGS = {
     remove: "delete_category",
     move: "move_category",
     sort: "sort_category",
+    color: "set_category_color",
     items: () => categories,
   },
   tag: {
@@ -100,6 +101,7 @@ const CATALOGS = {
     remove: "delete_tag",
     move: "move_tag",
     sort: "sort_tag",
+    color: "set_tag_color",
     items: () => tags,
   },
   list: {
@@ -116,6 +118,7 @@ const CATALOGS = {
     remove: "delete_list",
     move: "move_list",
     sort: "sort_list",
+    color: "set_list_color",
     items: () => lists,
   },
 };
@@ -464,27 +467,39 @@ function renderLibrary() {
   );
 }
 
-function navButton(label, icon, active, onClick, count) {
+function navButton(label, icon, active, onClick, count, color) {
   const button = document.createElement("button");
   button.type = "button";
   button.className = active ? "nav active" : "nav";
   const main = document.createElement("span");
   main.className = "nav-main";
   main.append(navIcon(icon));
-  appendCountedLabel(main, label, count);
+  appendCountedLabel(main, label, count, color);
   button.append(main);
   button.addEventListener("click", onClick);
   return button;
 }
 
-function appendCountedLabel(parent, label, count) {
+function appendCountedLabel(parent, label, count, color) {
   const text = document.createElement("span");
   text.className = "nav-label";
   text.textContent = label;
+  parent.append(text);
+  const mark = colorMark(color);
+  if (mark) parent.append(mark);
   const badge = document.createElement("span");
   badge.className = "count";
   badge.textContent = `(${count})`;
-  parent.append(text, badge);
+  parent.append(badge);
+}
+
+function colorMark(color) {
+  if (!BOOK_COLORS.has(color)) return null;
+  const mark = document.createElement("span");
+  mark.className = "color-mark";
+  mark.style.backgroundColor = color;
+  mark.setAttribute("aria-hidden", "true");
+  return mark;
 }
 
 const NAV_ICON_PATHS = {
@@ -545,7 +560,7 @@ function nameButton(item, active, kind, onClick) {
   const main = document.createElement("span");
   main.className = "nav-main";
   main.append(navIcon(kind));
-  appendCountedLabel(main, item.name, item.count);
+  appendCountedLabel(main, item.name, item.count, item.color);
   button.append(main);
   button.addEventListener("click", onClick);
   return button;
@@ -560,7 +575,7 @@ function renderLists() {
         viewState.id = list.id;
         viewState.name = list.name;
         reload();
-      }, list.count),
+      }, list.count, list.color),
     );
   }
 }
@@ -1107,7 +1122,8 @@ function renderCatalog() {
     name.type = "button";
     name.className = "catalog-name";
     name.dir = "auto";
-    appendCountedLabel(name, item.name, item.count);
+    name.append(navIcon(catalogKind));
+    appendCountedLabel(name, item.name, item.count, item.color);
     name.addEventListener("click", () => selectCatalog(item.id));
     row.append(name);
     catalogList.append(row);
@@ -1168,6 +1184,16 @@ function updateCatalogButtons() {
   const chosen = sort.value;
   sort.disabled = catalogBusy || items.length < 2;
   sort.value = catalogBusy && chosen ? chosen : (catalogSortMode || detectCatalogSort(items));
+  syncCatalogColor();
+}
+
+function syncCatalogColor() {
+  const item = selectedCatalogItem();
+  const chosen = item && BOOK_COLORS.has(item.color) ? item.color : "";
+  for (const swatch of document.querySelectorAll("#catalog-colors .swatch")) {
+    swatch.disabled = catalogBusy || !item;
+    swatch.setAttribute("aria-pressed", item && swatch.dataset.color === chosen ? "true" : "false");
+  }
 }
 
 async function runCatalog(task) {
@@ -1256,6 +1282,21 @@ async function moveCatalogItem(direction) {
   try {
     await invoke(spec.move, { id: catalogSelection, direction });
     catalogSortMode = "";
+    catalogStatus.textContent = "";
+    await reload();
+  } catch (error) {
+    catalogError(error);
+  }
+}
+
+async function setCatalogColor(color) {
+  const item = selectedCatalogItem();
+  const spec = CATALOGS[catalogKind];
+  if (!item || !spec) return;
+  const next = BOOK_COLORS.has(color) ? color : "";
+  if ((item.color || "") === next) return;
+  try {
+    await invoke(spec.color, { id: item.id, color: next });
     catalogStatus.textContent = "";
     await reload();
   } catch (error) {
@@ -1354,6 +1395,11 @@ function bind() {
     runCatalog(() => removeCatalogItem()).catch(catalogError);
   });
   document.querySelector("#catalog-close").addEventListener("click", () => catalogDialog.close());
+  for (const swatch of document.querySelectorAll("#catalog-colors .swatch")) {
+    swatch.addEventListener("click", () => {
+      runCatalog(() => setCatalogColor(swatch.dataset.color)).catch(catalogError);
+    });
+  }
   document.querySelector("#catalog-form").addEventListener("submit", (event) => {
     event.preventDefault();
   });

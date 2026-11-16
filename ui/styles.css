@@ -262,8 +262,22 @@ button.icon {
 }
 
 .nav-main > .count,
-.list-name > .count {
+.list-name > .count,
+.catalog-name > .count {
   flex: none;
+}
+
+.color-mark {
+  flex: none;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  border: 1px solid rgba(36, 31, 26, 0.2);
+}
+
+.nav.active .color-mark,
+.catalog-row.selected .color-mark {
+  border-color: rgba(255, 255, 255, 0.55);
 }
 
 .list-row { padding: 0; }
@@ -1130,6 +1144,20 @@ dialog input[type="text"], dialog textarea { width: 100%; box-sizing: border-box
 }
 
 .catalog-row.selected .count { color: #fff; }
+
+.catalog-color {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 12px;
+}
+
+.catalog-color > span { color: var(--muted); }
+
+#catalog-colors .swatch:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
 
 #catalog-rename, #catalog-delete {
   height: 32px;
