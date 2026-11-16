@@ -145,6 +145,37 @@ button.icon {
   border-radius: 8px;
 }
 
+.hint { position: relative; }
+
+.hint::after {
+  content: attr(data-hint);
+  position: absolute;
+  z-index: 4;
+  left: 0;
+  bottom: calc(100% + 6px);
+  padding: 4px 8px;
+  background: var(--paper);
+  color: var(--ink);
+  font-size: 12px;
+  font-weight: 400;
+  letter-spacing: 0;
+  line-height: 1.2;
+  text-transform: none;
+  white-space: nowrap;
+  border-radius: 4px;
+  box-shadow: var(--shadow);
+  pointer-events: none;
+  opacity: 0;
+}
+
+.hint:hover::after,
+.hint:focus-visible::after { opacity: 1; }
+
+.section-row .hint::after {
+  left: auto;
+  right: 0;
+}
+
 #library-nav, #category-nav, #tag-nav, #list-nav {
   display: flex;
   flex-direction: column;
