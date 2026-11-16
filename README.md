@@ -34,7 +34,7 @@ Okular is used to open books; if it is not installed, the file opens with `xdg-o
 
 # Build and run:
 ```
-        # To build and run a live development version:
+        # To build and run a live development version that updates instantly:
         cargo tauri dev
 
         # To build release:

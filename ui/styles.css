@@ -140,6 +140,11 @@ button.icon {
   line-height: 1;
 }
 
+.section-row button.icon:hover {
+  background: rgba(36, 31, 26, 0.08);
+  border-radius: 8px;
+}
+
 #library-nav, #category-nav, #tag-nav, #list-nav {
   display: flex;
   flex-direction: column;
@@ -203,6 +208,11 @@ button.icon {
 .list-more {
   padding: 8px 10px;
   color: var(--muted);
+}
+
+.nav:hover:not(.active) {
+  background: rgba(36, 31, 26, 0.08);
+  border-radius: 8px;
 }
 
 .nav.active, .list-row.active {
@@ -797,7 +807,7 @@ dialog input[type="text"], dialog textarea { width: 100%; box-sizing: border-box
 }
 
 #catalog-dialog {
-  width: min(420px, calc(100% - 32px));
+  width: min(500px, calc(100% - 32px));
   overflow: visible;
 }
 
@@ -814,8 +824,8 @@ dialog input[type="text"], dialog textarea { width: 100%; box-sizing: border-box
   display: flex;
   flex-direction: column;
   gap: 2px;
-  min-height: 180px;
-  max-height: min(360px, 50vh);
+  min-height: 340px;
+  max-height: min(560px, 70vh);
   margin-top: 14px;
   overflow: auto;
   border: 1px solid var(--line);
