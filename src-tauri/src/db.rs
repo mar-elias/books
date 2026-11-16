@@ -19,6 +19,8 @@ pub struct Book {
     pub list_ids: Vec<i64>,
     pub color: String,
     pub notes: String,
+    pub added_at: Option<String>,
+    pub modified_at: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -140,9 +142,10 @@ impl Library {
 
     pub fn add_book(&self, draft: &Draft) -> Result<Book, DbError> {
         let tx = self.conn.unchecked_transaction()?;
+        let stamp = now_utc();
         let insert = tx.execute(
-            "INSERT INTO books (title, author, year, file_path, format, color, notes)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
+            "INSERT INTO books (title, author, year, file_path, format, color, notes, added_at, modified_at)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
             params![
                 draft.title,
                 draft.author,
@@ -150,7 +153,9 @@ impl Library {
                 none_if_empty(&draft.file_path),
                 none_if_empty(&draft.format),
                 none_if_empty(&draft.color),
-                none_if_empty(&draft.notes)
+                none_if_empty(&draft.notes),
+                &stamp,
+                &stamp
             ],
         );
         if let Err(err) = insert {
@@ -172,8 +177,9 @@ impl Library {
         let tx = self.conn.unchecked_transaction()?;
         let updated = tx.execute(
             "UPDATE books
-             SET title = ?1, author = ?2, year = ?3, file_path = ?4, format = ?5, color = ?6, notes = ?7
-             WHERE id = ?8",
+             SET title = ?1, author = ?2, year = ?3, file_path = ?4, format = ?5, color = ?6, notes = ?7,
+                 modified_at = ?8
+             WHERE id = ?9",
             params![
                 draft.title,
                 draft.author,
@@ -182,6 +188,7 @@ impl Library {
                 none_if_empty(&draft.format),
                 none_if_empty(&draft.color),
                 none_if_empty(&draft.notes),
+                now_utc(),
                 id
             ],
         );
@@ -222,7 +229,7 @@ impl Library {
 
     pub fn book(&self, id: i64) -> Result<Option<Book>, DbError> {
         let mut stmt = self.conn.prepare(
-            "SELECT id, title, author, year, file_path, format, cover_path, color, notes
+            "SELECT id, title, author, year, file_path, format, cover_path, color, notes, added_at, modified_at
              FROM books WHERE id = ?1",
         )?;
         let row = stmt
@@ -242,7 +249,7 @@ impl Library {
         let rows = match scope {
             BookScope::All => {
                 stmt = self.conn.prepare(
-                    "SELECT id, title, author, year, file_path, format, cover_path, color, notes
+                    "SELECT id, title, author, year, file_path, format, cover_path, color, notes, added_at, modified_at
                      FROM books
                      ORDER BY title COLLATE NOCASE, id",
                 )?;
@@ -250,7 +257,7 @@ impl Library {
             }
             BookScope::Author(author) => {
                 stmt = self.conn.prepare(
-                    "SELECT id, title, author, year, file_path, format, cover_path, color, notes
+                    "SELECT id, title, author, year, file_path, format, cover_path, color, notes, added_at, modified_at
                      FROM books
                      WHERE author = ?1
                      ORDER BY title COLLATE NOCASE, id",
@@ -260,7 +267,7 @@ impl Library {
             }
             BookScope::Category(name) => {
                 stmt = self.conn.prepare(
-                    "SELECT b.id, b.title, b.author, b.year, b.file_path, b.format, b.cover_path, b.color, b.notes
+                    "SELECT b.id, b.title, b.author, b.year, b.file_path, b.format, b.cover_path, b.color, b.notes, b.added_at, b.modified_at
                      FROM books b
                      JOIN book_categories bc ON bc.book_id = b.id
                      JOIN categories c ON c.id = bc.category_id
@@ -272,7 +279,7 @@ impl Library {
             }
             BookScope::Tag(name) => {
                 stmt = self.conn.prepare(
-                    "SELECT b.id, b.title, b.author, b.year, b.file_path, b.format, b.cover_path, b.color, b.notes
+                    "SELECT b.id, b.title, b.author, b.year, b.file_path, b.format, b.cover_path, b.color, b.notes, b.added_at, b.modified_at
                      FROM books b
                      JOIN book_tags bt ON bt.book_id = b.id
                      JOIN tags t ON t.id = bt.tag_id
@@ -284,7 +291,7 @@ impl Library {
             }
             BookScope::List(list_id) => {
                 stmt = self.conn.prepare(
-                    "SELECT b.id, b.title, b.author, b.year, b.file_path, b.format, b.cover_path, b.color, b.notes
+                    "SELECT b.id, b.title, b.author, b.year, b.file_path, b.format, b.cover_path, b.color, b.notes, b.added_at, b.modified_at
                      FROM books b
                      JOIN list_books lb ON lb.book_id = b.id
                      WHERE lb.list_id = ?1
@@ -593,7 +600,9 @@ impl Library {
                  format TEXT CHECK (format IS NULL OR format IN ('pdf', 'epub')),
                  cover_path TEXT,
                  color TEXT,
-                 notes TEXT
+                 notes TEXT,
+                 added_at TEXT,
+                 modified_at TEXT
              );
              CREATE TABLE IF NOT EXISTS categories (
                  id INTEGER PRIMARY KEY,
@@ -633,6 +642,19 @@ impl Library {
         self.add_book_color()?;
         self.add_book_notes()?;
         self.add_catalog_positions()?;
+        self.add_book_dates()?;
+        Ok(())
+    }
+
+    fn add_book_dates(&self) -> Result<(), DbError> {
+        if !self.has_column("books", "added_at")? {
+            self.conn
+                .execute("ALTER TABLE books ADD COLUMN added_at TEXT", [])?;
+        }
+        if !self.has_column("books", "modified_at")? {
+            self.conn
+                .execute("ALTER TABLE books ADD COLUMN modified_at TEXT", [])?;
+        }
         Ok(())
     }
 
@@ -889,7 +911,44 @@ fn map_book_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<Book> {
         list_ids: Vec::new(),
         color: row.get::<_, Option<String>>(7)?.unwrap_or_default(),
         notes: row.get::<_, Option<String>>(8)?.unwrap_or_default(),
+        added_at: row.get(9)?,
+        modified_at: row.get(10)?,
     })
+}
+
+fn now_utc() -> String {
+    let millis = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|duration| duration.as_millis() as i64)
+        .unwrap_or(0);
+    let seconds = millis.div_euclid(1000);
+    let fraction = millis.rem_euclid(1000);
+    let stamp = format_utc(seconds);
+    format!("{}.{fraction:03}Z", &stamp[..stamp.len() - 1])
+}
+
+fn format_utc(seconds: i64) -> String {
+    let days = seconds.div_euclid(86_400);
+    let time = seconds.rem_euclid(86_400) as u32;
+    let hour = time / 3600;
+    let minute = (time % 3600) / 60;
+    let second = time % 60;
+    let (year, month, day) = civil_from_days(days);
+    format!("{year:04}-{month:02}-{day:02}T{hour:02}:{minute:02}:{second:02}Z")
+}
+
+fn civil_from_days(days: i64) -> (i32, u32, u32) {
+    let z = days + 719_468;
+    let era = if z >= 0 { z } else { z - 146_096 } / 146_097;
+    let doe = (z - era * 146_097) as u64;
+    let yoe = (doe - doe / 1460 + doe / 36524 - doe / 146096) / 365;
+    let year = yoe as i64 + era * 400;
+    let doy = doe - (365 * yoe + yoe / 4 - yoe / 100);
+    let month_index = (5 * doy + 2) / 153;
+    let day = doy - (153 * month_index + 2) / 5 + 1;
+    let month = if month_index < 10 { month_index + 3 } else { month_index - 9 };
+    let year = if month <= 2 { year + 1 } else { year };
+    (year as i32, month as u32, day as u32)
 }
 
 fn replace_names(
@@ -1092,6 +1151,8 @@ mod tests {
         assert_eq!(books.len(), 1);
         assert_eq!(books[0].title, "Dune");
         assert_eq!(books[0].file_path, "/books/dune.epub");
+        assert!(books[0].added_at.is_none());
+        assert!(books[0].modified_at.is_none());
         library.add_book(&pathless("Notes")).unwrap();
         library.add_book(&pathless("More")).unwrap();
         assert_eq!(library.books(&BookScope::All).unwrap().len(), 3);
@@ -1115,6 +1176,33 @@ mod tests {
         let updated = library.update_book(book.id, &item).unwrap();
         assert_eq!(updated.notes, "");
         let _ = fs::remove_dir_all(dir);
+    }
+
+    #[test]
+    fn book_dates_are_set_on_add_and_modified_on_save() {
+        let (library, dir) = temp_library();
+        let book = library
+            .add_book(&draft("Dune", "Frank Herbert", "/books/dune.epub"))
+            .unwrap();
+        let added = book.added_at.clone().expect("date added");
+        let modified = book.modified_at.clone().expect("date modified");
+        assert_eq!(added, modified);
+        assert!(added.contains('T') && added.ends_with('Z'));
+        std::thread::sleep(std::time::Duration::from_millis(5));
+        let saved = library
+            .update_book(book.id, &draft("Dune", "Frank Herbert", "/books/dune.epub"))
+            .unwrap();
+        assert_eq!(saved.added_at.as_deref(), Some(added.as_str()));
+        let next_modified = saved.modified_at.expect("date modified");
+        assert!(next_modified > added);
+        let _ = fs::remove_dir_all(dir);
+    }
+
+    #[test]
+    fn utc_stamp_formats_known_instants() {
+        assert_eq!(format_utc(0), "1970-01-01T00:00:00Z");
+        assert_eq!(format_utc(1_577_923_200), "2020-01-01T00:00:00Z");
+        assert_eq!(format_utc(1_577_923_200 + 3661), "2020-01-01T01:01:01Z");
     }
 
     #[test]
@@ -1383,9 +1471,13 @@ mod tests {
             list_ids: Vec::new(),
             color: String::new(),
             notes: String::new(),
+            added_at: Some("2026-11-16T12:00:00.000Z".to_string()),
+            modified_at: Some("2026-11-16T12:04:00.000Z".to_string()),
         };
         let json = serde_json::to_value(&book).unwrap();
         assert_eq!(json["filePath"], "/books/dune.epub");
+        assert_eq!(json["addedAt"], "2026-11-16T12:00:00.000Z");
+        assert_eq!(json["modifiedAt"], "2026-11-16T12:04:00.000Z");
         assert!(json.get("file_path").is_none());
     }
 

@@ -30,7 +30,11 @@ const BOOK_COLORS = new Set([
 const ZOOM_WIDTHS = [112, 136, 160, 192, 232, 280, 336];
 const ZOOM_DEFAULT = 2;
 const ZOOM_KEY = "books-zoom";
+const SORT_KEY = "books-sort";
+const BOOK_SORTS = new Set(["title", "added-desc", "added-asc", "modified-desc", "modified-asc"]);
+const SORT_ALIASES = { newest: "added-desc", oldest: "added-asc" };
 let zoomLevel = storedZoom();
+let bookSort = storedBookSort();
 
 const libraryNav = document.querySelector("#library-nav");
 const categoryNav = document.querySelector("#category-nav");
@@ -128,6 +132,62 @@ function storedZoom() {
     /* keep the default size when storage is unavailable */
   }
   return ZOOM_DEFAULT;
+}
+
+function storedBookSort() {
+  try {
+    const raw = localStorage.getItem(SORT_KEY);
+    const stored = SORT_ALIASES[raw] || raw;
+    if (BOOK_SORTS.has(stored)) return stored;
+  } catch (_error) {
+    /* keep alphabetical order when storage is unavailable */
+  }
+  return "title";
+}
+
+function setBookSort(next) {
+  bookSort = BOOK_SORTS.has(next) ? next : "title";
+  try {
+    localStorage.setItem(SORT_KEY, bookSort);
+  } catch (_error) {
+    /* the chosen order still applies for this visit */
+  }
+  if (viewState.kind !== "authors") renderBooks();
+}
+
+function bookStamp(book) {
+  const key = bookSort.startsWith("modified") ? "modifiedAt" : "addedAt";
+  const value = book[key];
+  return typeof value === "string" && value ? value : null;
+}
+
+function formatBookDate(value) {
+  if (!value) return "Unknown";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "Unknown";
+  return date.toLocaleString(undefined, {
+    year: "numeric",
+    month: "short",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  });
+}
+
+function compareBooks(a, b) {
+  if (bookSort !== "title") {
+    const stampA = bookStamp(a);
+    const stampB = bookStamp(b);
+    if (stampA == null && stampB != null) return 1;
+    if (stampA != null && stampB == null) return -1;
+    if (stampA != null && stampB != null && stampA !== stampB) {
+      const order = stampA.localeCompare(stampB);
+      return bookSort.endsWith("desc") ? -order : order;
+    }
+  }
+  const byTitle = a.title.localeCompare(b.title, undefined, { sensitivity: "base", numeric: true });
+  if (byTitle !== 0) return byTitle;
+  return a.id - b.id;
 }
 
 function applyZoom() {
@@ -446,7 +506,7 @@ function renderLists() {
 
 function renderBooks() {
   const filtering = query().length > 0;
-  const visible = books.filter((book) => bookMatches(book, query()));
+  const visible = books.filter((book) => bookMatches(book, query())).sort(compareBooks);
   content.replaceChildren();
   if (visible.length === 0) {
     content.append(emptyState(filtering));
@@ -699,6 +759,10 @@ function openBookDialog(book) {
   document.querySelector("#field-title").value = book ? book.title : "";
   document.querySelector("#field-author").value = book ? book.author : "";
   document.querySelector("#field-year").value = book && book.year != null ? String(book.year) : "";
+  document.querySelector("#field-added").closest("label").hidden = !book;
+  document.querySelector("#field-modified").closest("label").hidden = !book;
+  document.querySelector("#field-added").value = book ? formatBookDate(book.addedAt) : "";
+  document.querySelector("#field-modified").value = book ? formatBookDate(book.modifiedAt) : "";
   document.querySelector("#field-notes").value = book && book.notes ? book.notes : "";
   selectColor(book && book.color ? book.color : "");
   renderPicker(
@@ -1104,6 +1168,9 @@ async function saveSettings() {
 
 function bind() {
   applyZoom();
+  const bookSortControl = document.querySelector("#book-sort");
+  bookSortControl.value = bookSort;
+  bookSortControl.addEventListener("change", () => setBookSort(bookSortControl.value));
   document.querySelector("#zoom-out").addEventListener("click", () => setZoom(zoomLevel - 1));
   document.querySelector("#zoom-in").addEventListener("click", () => setZoom(zoomLevel + 1));
   document.querySelector("#manage-categories").addEventListener("click", () => openCatalog("category"));

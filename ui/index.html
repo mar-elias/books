@@ -42,6 +42,15 @@
           <button id="back" class="text" type="button" hidden>Back</button>
           <h1 id="heading">All books</h1>
           <div class="header-actions">
+            <div class="shelf-sort">
+              <select id="book-sort" aria-label="Sort books">
+                <option value="title">Alphabetically</option>
+                <option value="added-desc">Date added (newer first)</option>
+                <option value="added-asc">Date added (older first)</option>
+                <option value="modified-desc">Date modified (newer first)</option>
+                <option value="modified-asc">Date modified (older first)</option>
+              </select>
+            </div>
             <div class="zoom" role="group" aria-label="Zoom">
               <button id="zoom-out" class="text" type="button" aria-label="Zoom out">−</button>
               <span class="zoom-mark" aria-hidden="true">
@@ -72,7 +81,11 @@
           <label class="wide">Cover path <input id="field-cover" type="text" spellcheck="false" /></label>
           <label>Title <input id="field-title" type="text" /></label>
           <label>Author <input id="field-author" type="text" /></label>
-          <label>Year <input id="field-year" type="text" inputmode="numeric" /></label>
+          <div class="date-fields" id="book-dates">
+            <label>Year <input id="field-year" type="text" inputmode="numeric" /></label>
+            <label>Date added <input id="field-added" type="text" readonly /></label>
+            <label>Date modified <input id="field-modified" type="text" readonly /></label>
+          </div>
           <div class="color-field" id="book-colors">
             <span>Color</span>
             <div class="swatches" role="radiogroup" aria-label="Color">
@@ -86,20 +99,22 @@
               <button type="button" class="swatch" data-color="#fce94f" aria-label="#fce94f"></button>
             </div>
           </div>
-          <div class="picker" id="category-picker" data-empty="Add one from the Categories menu.">
-            <span>Categories</span>
-            <button type="button" class="picker-button"><span>None</span></button>
-            <div class="picker-menu" hidden></div>
-          </div>
-          <div class="picker" id="tag-picker" data-empty="Add one from the Tags menu.">
-            <span>Tags</span>
-            <button type="button" class="picker-button"><span>None</span></button>
-            <div class="picker-menu" hidden></div>
-          </div>
-          <div class="picker wide" id="list-picker" data-empty="Add one from the Lists menu.">
-            <span>Lists</span>
-            <button type="button" class="picker-button"><span>None</span></button>
-            <div class="picker-menu" hidden></div>
+          <div class="choice-fields">
+            <div class="picker" id="category-picker" data-empty="Add one from the Categories menu.">
+              <span>Categories</span>
+              <button type="button" class="picker-button"><span>None</span></button>
+              <div class="picker-menu" hidden></div>
+            </div>
+            <div class="picker" id="tag-picker" data-empty="Add one from the Tags menu.">
+              <span>Tags</span>
+              <button type="button" class="picker-button"><span>None</span></button>
+              <div class="picker-menu" hidden></div>
+            </div>
+            <div class="picker" id="list-picker" data-empty="Add one from the Lists menu.">
+              <span>Lists</span>
+              <button type="button" class="picker-button"><span>None</span></button>
+              <div class="picker-menu" hidden></div>
+            </div>
           </div>
           <div class="detail-row">
             <label>Notes <textarea id="field-notes" rows="7" dir="auto"></textarea></label>
