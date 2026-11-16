@@ -46,6 +46,7 @@ pub struct AuthorGroup {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct NameCount {
+    pub id: i64,
     pub name: String,
     pub count: i64,
 }
@@ -328,48 +329,141 @@ impl Library {
         self.name_counts(NameKind::Tag)
     }
 
-    pub fn create_category(&self, name: &str) -> Result<(), DbError> {
-        self.insert_catalog_name(
-            "INSERT INTO categories (name) VALUES (?1)",
-            name,
-            UniqueKind::Category,
-        )
+    pub fn create_category(&self, name: &str) -> Result<NameCount, DbError> {
+        self.insert_named("categories", name, UniqueKind::Category)
     }
 
-    pub fn create_tag(&self, name: &str) -> Result<(), DbError> {
-        self.insert_catalog_name("INSERT INTO tags (name) VALUES (?1)", name, UniqueKind::Tag)
+    pub fn create_tag(&self, name: &str) -> Result<NameCount, DbError> {
+        self.insert_named("tags", name, UniqueKind::Tag)
     }
 
-    fn insert_catalog_name(&self, sql: &str, name: &str, kind: UniqueKind) -> Result<(), DbError> {
-        match self.conn.execute(sql, params![name]) {
+    pub fn rename_category(&self, id: i64, name: &str) -> Result<(), DbError> {
+        self.rename_named("categories", id, name, UniqueKind::Category)
+    }
+
+    pub fn rename_tag(&self, id: i64, name: &str) -> Result<(), DbError> {
+        self.rename_named("tags", id, name, UniqueKind::Tag)
+    }
+
+    pub fn delete_category(&self, id: i64) -> Result<(), DbError> {
+        self.delete_named("categories", id)
+    }
+
+    pub fn delete_tag(&self, id: i64) -> Result<(), DbError> {
+        self.delete_named("tags", id)
+    }
+
+    pub fn move_category(&self, id: i64, direction: i32) -> Result<(), DbError> {
+        self.move_named("categories", id, direction)
+    }
+
+    pub fn move_tag(&self, id: i64, direction: i32) -> Result<(), DbError> {
+        self.move_named("tags", id, direction)
+    }
+
+    pub fn move_list(&self, id: i64, direction: i32) -> Result<(), DbError> {
+        self.move_named("lists", id, direction)
+    }
+
+    fn insert_named(&self, table: &str, name: &str, kind: UniqueKind) -> Result<NameCount, DbError> {
+        let sql = format!(
+            "INSERT INTO {table} (name, position)
+             VALUES (?1, COALESCE((SELECT MAX(position) FROM {table}), 0) + 1)"
+        );
+        match self.conn.execute(&sql, params![name]) {
+            Ok(_) => Ok(NameCount {
+                id: self.conn.last_insert_rowid(),
+                name: name.to_string(),
+                count: 0,
+            }),
+            Err(err) => Err(map_unique(err, kind)),
+        }
+    }
+
+    fn rename_named(
+        &self,
+        table: &str,
+        id: i64,
+        name: &str,
+        kind: UniqueKind,
+    ) -> Result<(), DbError> {
+        let result = self.conn.execute(
+            &format!("UPDATE {table} SET name = ?1 WHERE id = ?2"),
+            params![name, id],
+        );
+        match result {
+            Ok(0) => Err(DbError::NotFound),
             Ok(_) => Ok(()),
             Err(err) => Err(map_unique(err, kind)),
         }
     }
 
+    fn delete_named(&self, table: &str, id: i64) -> Result<(), DbError> {
+        let removed = self
+            .conn
+            .execute(&format!("DELETE FROM {table} WHERE id = ?1"), params![id])?;
+        if removed == 0 {
+            Err(DbError::NotFound)
+        } else {
+            Ok(())
+        }
+    }
+
+    fn move_named(&self, table: &str, id: i64, direction: i32) -> Result<(), DbError> {
+        let mut ids = self.ordered_ids(table)?;
+        let Some(index) = ids.iter().position(|item| *item == id) else {
+            return Err(DbError::NotFound);
+        };
+        let target = index as isize + direction as isize;
+        if target < 0 || target >= ids.len() as isize {
+            return Ok(());
+        }
+        ids.swap(index, target as usize);
+        let tx = self.conn.unchecked_transaction()?;
+        for (position, item_id) in ids.iter().enumerate() {
+            tx.execute(
+                &format!("UPDATE {table} SET position = ?1 WHERE id = ?2"),
+                params![position as i64, item_id],
+            )?;
+        }
+        tx.commit()?;
+        Ok(())
+    }
+
+    fn ordered_ids(&self, table: &str) -> Result<Vec<i64>, DbError> {
+        let mut stmt = self
+            .conn
+            .prepare(&format!("SELECT id FROM {table} ORDER BY position, id"))?;
+        let ids = stmt
+            .query_map([], |row| row.get(0))?
+            .collect::<Result<Vec<i64>, _>>()?;
+        Ok(ids)
+    }
+
     fn name_counts(&self, kind: NameKind) -> Result<Vec<NameCount>, DbError> {
         let sql = match kind {
             NameKind::Category => {
-                "SELECT c.name, COUNT(bc.book_id)
+                "SELECT c.id, c.name, COUNT(bc.book_id)
                  FROM categories c
                  LEFT JOIN book_categories bc ON bc.category_id = c.id
                  GROUP BY c.id
-                 ORDER BY c.name COLLATE NOCASE"
+                 ORDER BY c.position, c.id"
             }
             NameKind::Tag => {
-                "SELECT t.name, COUNT(bt.book_id)
+                "SELECT t.id, t.name, COUNT(bt.book_id)
                  FROM tags t
                  LEFT JOIN book_tags bt ON bt.tag_id = t.id
                  GROUP BY t.id
-                 ORDER BY t.name COLLATE NOCASE"
+                 ORDER BY t.position, t.id"
             }
         };
         let mut stmt = self.conn.prepare(sql)?;
         let names = stmt
             .query_map([], |row| {
                 Ok(NameCount {
-                    name: row.get(0)?,
-                    count: row.get(1)?,
+                    id: row.get(0)?,
+                    name: row.get(1)?,
+                    count: row.get(2)?,
                 })
             })?
             .collect::<Result<Vec<_>, _>>()?;
@@ -426,26 +520,11 @@ impl Library {
     }
 
     pub fn rename_list(&self, id: i64, name: &str) -> Result<(), DbError> {
-        let result = self.conn.execute(
-            "UPDATE lists SET name = ?1 WHERE id = ?2",
-            params![name, id],
-        );
-        match result {
-            Ok(0) => Err(DbError::NotFound),
-            Ok(_) => Ok(()),
-            Err(err) => Err(map_unique(err, UniqueKind::List)),
-        }
+        self.rename_named("lists", id, name, UniqueKind::List)
     }
 
     pub fn delete_list(&self, id: i64) -> Result<(), DbError> {
-        let removed = self
-            .conn
-            .execute("DELETE FROM lists WHERE id = ?1", params![id])?;
-        if removed == 0 {
-            Err(DbError::NotFound)
-        } else {
-            Ok(())
-        }
+        self.delete_named("lists", id)
     }
 
     pub fn add_book_to_list(&self, list_id: i64, book_id: i64) -> Result<bool, DbError> {
@@ -486,7 +565,8 @@ impl Library {
              );
              CREATE TABLE IF NOT EXISTS categories (
                  id INTEGER PRIMARY KEY,
-                 name TEXT NOT NULL UNIQUE COLLATE NOCASE
+                 name TEXT NOT NULL UNIQUE COLLATE NOCASE,
+                 position INTEGER NOT NULL DEFAULT 0
              );
              CREATE TABLE IF NOT EXISTS book_categories (
                  book_id INTEGER NOT NULL REFERENCES books(id) ON DELETE CASCADE,
@@ -495,7 +575,8 @@ impl Library {
              );
              CREATE TABLE IF NOT EXISTS tags (
                  id INTEGER PRIMARY KEY,
-                 name TEXT NOT NULL UNIQUE COLLATE NOCASE
+                 name TEXT NOT NULL UNIQUE COLLATE NOCASE,
+                 position INTEGER NOT NULL DEFAULT 0
              );
              CREATE TABLE IF NOT EXISTS book_tags (
                  book_id INTEGER NOT NULL REFERENCES books(id) ON DELETE CASCADE,
@@ -519,7 +600,50 @@ impl Library {
         self.allow_books_without_files()?;
         self.add_book_color()?;
         self.add_book_notes()?;
+        self.add_catalog_positions()?;
         Ok(())
+    }
+
+    fn add_catalog_positions(&self) -> Result<(), DbError> {
+        self.add_position_column("categories")?;
+        self.add_position_column("tags")?;
+        Ok(())
+    }
+
+    fn add_position_column(&self, table: &str) -> Result<(), DbError> {
+        if self.has_column(table, "position")? {
+            return Ok(());
+        }
+        self.conn.execute(
+            &format!("ALTER TABLE {table} ADD COLUMN position INTEGER NOT NULL DEFAULT 0"),
+            [],
+        )?;
+        let ids = {
+            let mut stmt = self.conn.prepare(&format!(
+                "SELECT id FROM {table} ORDER BY name COLLATE NOCASE, id"
+            ))?;
+            stmt.query_map([], |row| row.get(0))?
+                .collect::<Result<Vec<i64>, _>>()?
+        };
+        let tx = self.conn.unchecked_transaction()?;
+        for (position, id) in ids.iter().enumerate() {
+            tx.execute(
+                &format!("UPDATE {table} SET position = ?1 WHERE id = ?2"),
+                params![position as i64, id],
+            )?;
+        }
+        tx.commit()?;
+        Ok(())
+    }
+
+    fn has_column(&self, table: &str, column: &str) -> Result<bool, DbError> {
+        let mut stmt = self
+            .conn
+            .prepare(&format!("PRAGMA table_info({table})"))?;
+        let names = stmt
+            .query_map([], |row| row.get::<_, String>(1))?
+            .collect::<Result<Vec<_>, _>>()?;
+        Ok(names.iter().any(|name| name == column))
     }
 
     fn add_book_notes(&self) -> Result<(), DbError> {
@@ -745,13 +869,17 @@ fn replace_names(
     let (link_delete, insert_name, link_insert) = match kind {
         NameKind::Category => (
             "DELETE FROM book_categories WHERE book_id = ?1",
-            "INSERT INTO categories (name) VALUES (?1) ON CONFLICT(name) DO NOTHING",
+            "INSERT INTO categories (name, position)
+             VALUES (?1, COALESCE((SELECT MAX(position) FROM categories), 0) + 1)
+             ON CONFLICT(name) DO NOTHING",
             "INSERT INTO book_categories (book_id, category_id)
              SELECT ?1, id FROM categories WHERE name = ?2 COLLATE NOCASE",
         ),
         NameKind::Tag => (
             "DELETE FROM book_tags WHERE book_id = ?1",
-            "INSERT INTO tags (name) VALUES (?1) ON CONFLICT(name) DO NOTHING",
+            "INSERT INTO tags (name, position)
+             VALUES (?1, COALESCE((SELECT MAX(position) FROM tags), 0) + 1)
+             ON CONFLICT(name) DO NOTHING",
             "INSERT INTO book_tags (book_id, tag_id)
              SELECT ?1, id FROM tags WHERE name = ?2 COLLATE NOCASE",
         ),
@@ -1041,6 +1169,112 @@ mod tests {
         assert_eq!(library.categories().unwrap()[0].name, "History");
         assert_eq!(library.categories().unwrap()[0].count, 0);
         assert_eq!(library.tags().unwrap()[0].count, 0);
+        let _ = fs::remove_dir_all(dir);
+    }
+
+    #[test]
+    fn catalog_order_rename_and_delete() {
+        let dir = std::env::temp_dir().join(format!(
+            "ebook-reader-order-{}-{}",
+            std::process::id(),
+            unique_suffix()
+        ));
+        let _ = fs::remove_dir_all(&dir);
+        fs::create_dir_all(&dir).unwrap();
+        let db_path = dir.join("library.db");
+        {
+            let conn = Connection::open(&db_path).unwrap();
+            conn.execute_batch(
+                "CREATE TABLE categories (
+                     id INTEGER PRIMARY KEY,
+                     name TEXT NOT NULL UNIQUE COLLATE NOCASE
+                 );
+                 INSERT INTO categories (name) VALUES ('Zebra');
+                 INSERT INTO categories (name) VALUES ('Alpha');
+                 INSERT INTO categories (name) VALUES ('Middle');
+                 CREATE TABLE tags (
+                     id INTEGER PRIMARY KEY,
+                     name TEXT NOT NULL UNIQUE COLLATE NOCASE
+                 );
+                 INSERT INTO tags (name) VALUES ('zeta');
+                 INSERT INTO tags (name) VALUES ('alpha');",
+            )
+            .unwrap();
+        }
+        let library = Library::open(&db_path, &dir.join("covers")).unwrap();
+        let names = |items: Vec<NameCount>| items.into_iter().map(|item| item.name).collect::<Vec<_>>();
+        assert_eq!(
+            names(library.categories().unwrap()),
+            vec!["Alpha", "Middle", "Zebra"]
+        );
+        assert_eq!(names(library.tags().unwrap()), vec!["alpha", "zeta"]);
+
+        let middle = library
+            .categories()
+            .unwrap()
+            .into_iter()
+            .find(|item| item.name == "Middle")
+            .unwrap();
+        library.move_category(middle.id, -1).unwrap();
+        assert_eq!(
+            names(library.categories().unwrap()),
+            vec!["Middle", "Alpha", "Zebra"]
+        );
+        let first = library.categories().unwrap()[0].id;
+        library.move_category(first, -1).unwrap();
+        assert_eq!(
+            names(library.categories().unwrap()),
+            vec!["Middle", "Alpha", "Zebra"]
+        );
+
+        let gamma = library.create_category("Gamma").unwrap();
+        assert_eq!(gamma.count, 0);
+        assert_eq!(
+            names(library.categories().unwrap()),
+            vec!["Middle", "Alpha", "Zebra", "Gamma"]
+        );
+        let alpha = library
+            .categories()
+            .unwrap()
+            .into_iter()
+            .find(|item| item.name == "Alpha")
+            .unwrap();
+        library.rename_category(alpha.id, "History").unwrap();
+        assert!(matches!(
+            library.rename_category(alpha.id, "middle"),
+            Err(DbError::DuplicateCategory)
+        ));
+
+        let mut item = draft("Dune", "Frank Herbert", "/books/dune.epub");
+        item.categories = vec!["History".to_string(), "Gamma".to_string()];
+        item.tags = vec!["later".to_string()];
+        let book = library.add_book(&item).unwrap();
+        assert_eq!(
+            names(library.categories().unwrap()),
+            vec!["Middle", "History", "Zebra", "Gamma"]
+        );
+        assert_eq!(
+            names(library.tags().unwrap()),
+            vec!["alpha", "zeta", "later"]
+        );
+        library.delete_category(gamma.id).unwrap();
+        let stored = library.book(book.id).unwrap().unwrap();
+        assert_eq!(stored.categories, vec!["History".to_string()]);
+        assert!(matches!(
+            library.delete_category(gamma.id),
+            Err(DbError::NotFound)
+        ));
+
+        let first_list = library.create_list("First").unwrap();
+        library.create_list("Second").unwrap();
+        let third = library.create_list("Third").unwrap();
+        library.move_list(third.id, -1).unwrap();
+        library.move_list(first_list.id, -1).unwrap();
+        let lists = library.lists().unwrap();
+        assert_eq!(
+            lists.iter().map(|list| list.name.as_str()).collect::<Vec<_>>(),
+            vec!["First", "Third", "Second"]
+        );
         let _ = fs::remove_dir_all(dir);
     }
 

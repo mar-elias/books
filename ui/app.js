@@ -46,6 +46,61 @@ const bookDialog = document.querySelector("#book-dialog");
 const promptDialog = document.querySelector("#prompt-dialog");
 const confirmDialog = document.querySelector("#confirm-dialog");
 const settingsDialog = document.querySelector("#settings-dialog");
+const catalogDialog = document.querySelector("#catalog-dialog");
+const catalogList = document.querySelector("#catalog-list");
+const catalogMenu = document.querySelector("#catalog-menu");
+const catalogStatus = document.querySelector("#catalog-status");
+let catalogKind = null;
+let catalogSelection = null;
+let catalogBusy = false;
+
+const CATALOGS = {
+  category: {
+    title: "Categories",
+    empty: "No categories yet.",
+    addTitle: "New category",
+    addConfirm: "Add",
+    addLabel: "Add category",
+    renameTitle: "Rename category",
+    deleteTitle: "Delete category?",
+    deleteMessage: (name) => `${name} will be removed from the library and from every book.`,
+    create: "create_category",
+    rename: "rename_category",
+    remove: "delete_category",
+    move: "move_category",
+    items: () => categories,
+  },
+  tag: {
+    title: "Tags",
+    empty: "No tags yet.",
+    addTitle: "New tag",
+    addConfirm: "Add",
+    addLabel: "Add tag",
+    renameTitle: "Rename tag",
+    deleteTitle: "Delete tag?",
+    deleteMessage: (name) => `${name} will be removed from the library and from every book.`,
+    create: "create_tag",
+    rename: "rename_tag",
+    remove: "delete_tag",
+    move: "move_tag",
+    items: () => tags,
+  },
+  list: {
+    title: "Lists",
+    empty: "No lists yet.",
+    addTitle: "New list",
+    addConfirm: "Create",
+    addLabel: "New list",
+    renameTitle: "Rename list",
+    deleteTitle: "Delete list?",
+    deleteMessage: (name) => `${name} will be removed. The books stay in the library.`,
+    create: "create_list",
+    rename: "rename_list",
+    remove: "delete_list",
+    move: "move_list",
+    items: () => lists,
+  },
+};
 
 function invoke(command, args) {
   return window.__TAURI__.core.invoke(command, args);
@@ -269,6 +324,7 @@ function render() {
   content.classList.toggle("authors-view", viewState.kind === "authors");
   if (viewState.kind === "authors") renderAuthors();
   else renderBooks();
+  if (catalogDialog.open) renderCatalog();
 }
 
 function renderLibrary() {
@@ -375,34 +431,14 @@ function nameButton(item, active, kind, onClick) {
 function renderLists() {
   listNav.replaceChildren();
   for (const list of lists) {
-    const row = document.createElement("div");
-    row.className = viewState.kind === "list" && viewState.id === list.id ? "list-row active" : "list-row";
-    const name = document.createElement("button");
-    name.type = "button";
-    name.className = "list-name";
-    name.append(navIcon("list"));
-    appendCountedLabel(name, list.name, list.count);
-    name.addEventListener("click", () => {
-      viewState.kind = "list";
-      viewState.id = list.id;
-      viewState.name = list.name;
-      reload();
-    });
-    const more = document.createElement("button");
-    more.type = "button";
-    more.className = "list-more";
-    more.setAttribute("aria-label", "List actions");
-    more.textContent = "···";
-    more.addEventListener("click", (event) => {
-      event.stopPropagation();
-      const rect = more.getBoundingClientRect();
-      showMenu(rect.left, rect.bottom, [
-        { label: "Rename", onSelect: () => renameList(list) },
-        { label: "Delete", danger: true, onSelect: () => removeList(list) },
-      ]);
-    });
-    row.append(name, more);
-    listNav.append(row);
+    listNav.append(
+      navButton(list.name, "list", viewState.kind === "list" && viewState.id === list.id, () => {
+        viewState.kind = "list";
+        viewState.id = list.id;
+        viewState.name = list.name;
+        reload();
+      }, list.count),
+    );
   }
 }
 
@@ -835,42 +871,217 @@ function askConfirm(title, message, confirm) {
   });
 }
 
-async function addCatalogName(title, confirm, command) {
-  const name = await askPrompt(title, confirm, "");
-  if (name == null) return;
+function openCatalog(kind) {
+  catalogKind = kind;
+  catalogSelection = null;
+  catalogStatus.textContent = "";
+  hideCatalogMenu();
+  renderCatalog();
+  if (!catalogDialog.open) catalogDialog.showModal();
+}
+
+function renderCatalog() {
+  const spec = CATALOGS[catalogKind];
+  if (!spec) return;
+  const scrollTop = catalogList.scrollTop;
+  hideCatalogMenu();
+  document.querySelector("#catalog-title").textContent = spec.title;
+  document.querySelector("#catalog-add").setAttribute("aria-label", spec.addLabel);
+  catalogList.replaceChildren();
+  catalogList.setAttribute("role", "listbox");
+  catalogList.setAttribute("aria-label", spec.title);
+  const items = spec.items();
+  if (items.length === 0) {
+    const empty = document.createElement("p");
+    empty.className = "catalog-empty";
+    empty.textContent = spec.empty;
+    catalogList.append(empty);
+  }
+  for (const item of items) {
+    const selected = item.id === catalogSelection;
+    const row = document.createElement("div");
+    row.className = selected ? "catalog-row selected" : "catalog-row";
+    row.dataset.id = String(item.id);
+    row.setAttribute("role", "option");
+    row.setAttribute("aria-selected", selected ? "true" : "false");
+    const name = document.createElement("button");
+    name.type = "button";
+    name.className = "catalog-name";
+    name.dir = "auto";
+    appendCountedLabel(name, item.name, item.count);
+    name.addEventListener("click", () => {
+      hideCatalogMenu();
+      selectCatalog(item.id);
+    });
+    const more = document.createElement("button");
+    more.type = "button";
+    more.className = "catalog-more";
+    more.setAttribute("aria-label", `${item.name} actions`);
+    more.textContent = "···";
+    more.addEventListener("click", (event) => {
+      event.stopPropagation();
+      selectCatalog(item.id);
+      if (!catalogMenu.hidden && catalogMenu.dataset.id === String(item.id)) {
+        hideCatalogMenu();
+        return;
+      }
+      showCatalogMenu(more, item);
+    });
+    row.append(name, more);
+    catalogList.append(row);
+  }
+  catalogList.scrollTop = scrollTop;
+  const current = catalogList.querySelector(".catalog-row.selected");
+  if (current) current.scrollIntoView({ block: "nearest" });
+  updateCatalogMoveButtons();
+}
+
+function selectCatalog(id) {
+  catalogSelection = id;
+  for (const row of catalogList.querySelectorAll(".catalog-row")) {
+    const selected = Number(row.dataset.id) === id;
+    row.classList.toggle("selected", selected);
+    row.setAttribute("aria-selected", selected ? "true" : "false");
+  }
+  updateCatalogMoveButtons();
+}
+
+function updateCatalogMoveButtons() {
+  const spec = CATALOGS[catalogKind];
+  const items = spec ? spec.items() : [];
+  const index = items.findIndex((item) => item.id === catalogSelection);
+  document.querySelector("#catalog-up").disabled = catalogBusy || index <= 0;
+  document.querySelector("#catalog-down").disabled = catalogBusy || index < 0 || index >= items.length - 1;
+}
+
+async function runCatalog(task) {
+  if (catalogBusy) return;
+  catalogBusy = true;
+  updateCatalogMoveButtons();
   try {
-    await invoke(command, { name });
-    await reload();
-  } catch (error) {
-    toast(errorText(error));
+    await task();
+  } finally {
+    catalogBusy = false;
+    if (catalogDialog.open) updateCatalogMoveButtons();
   }
 }
 
-async function renameList(list) {
-  const name = await askPrompt("Rename list", "Rename", list.name);
-  if (name == null) return;
-  try {
-    await invoke("rename_list", { id: list.id, name });
-    if (viewState.kind === "list" && viewState.id === list.id) viewState.name = name.trim();
-    await reload();
-  } catch (error) {
-    toast(errorText(error));
-  }
+function hideCatalogMenu() {
+  if (catalogMenu.hidden) return;
+  catalogMenu.hidden = true;
+  catalogMenu.replaceChildren();
+  delete catalogMenu.dataset.id;
 }
 
-async function removeList(list) {
-  const confirmed = await askConfirm(
-    "Delete list?",
-    `${list.name} will be removed. The books stay in the library.`,
-    "Delete",
+function showCatalogMenu(anchor, item) {
+  catalogMenu.replaceChildren();
+  catalogMenu.dataset.id = String(item.id);
+  catalogMenu.append(
+    catalogMenuButton("Rename", false, () => runCatalog(() => renameCatalogItem(item))),
+    catalogMenuButton("Delete", true, () => runCatalog(() => removeCatalogItem(item))),
   );
-  if (!confirmed) return;
+  catalogMenu.hidden = false;
+  catalogMenu.style.left = "0px";
+  catalogMenu.style.top = "0px";
+  const menuRect = catalogMenu.getBoundingClientRect();
+  const anchorRect = anchor.getBoundingClientRect();
+  const dialogRect = catalogDialog.getBoundingClientRect();
+  let top = anchorRect.bottom - dialogRect.top + 4;
+  if (anchorRect.bottom + menuRect.height + 8 > window.innerHeight) {
+    top = anchorRect.top - dialogRect.top - menuRect.height - 4;
+  }
+  let left = anchorRect.right - dialogRect.left - menuRect.width;
+  const minLeft = 8;
+  const maxLeft = dialogRect.width - menuRect.width - 8;
+  left = Math.min(Math.max(minLeft, left), Math.max(minLeft, maxLeft));
+  catalogMenu.style.left = `${left}px`;
+  catalogMenu.style.top = `${top}px`;
+}
+
+function catalogMenuButton(label, danger, onSelect) {
+  const button = document.createElement("button");
+  button.type = "button";
+  button.textContent = label;
+  button.setAttribute("role", "menuitem");
+  if (danger) button.className = "danger";
+  button.addEventListener("click", () => {
+    hideCatalogMenu();
+    onSelect();
+  });
+  return button;
+}
+
+function catalogError(error) {
+  catalogStatus.textContent = errorText(error);
+}
+
+async function addCatalogItem() {
+  const spec = CATALOGS[catalogKind];
+  hideCatalogMenu();
+  const name = await askPrompt(spec.addTitle, spec.addConfirm, "");
+  if (name == null) return;
   try {
-    await invoke("delete_list", { id: list.id });
-    if (viewState.kind === "list" && viewState.id === list.id) viewState.kind = "all";
+    const created = await invoke(spec.create, { name });
+    catalogSelection = created.id;
+    catalogStatus.textContent = "";
     await reload();
   } catch (error) {
-    toast(errorText(error));
+    catalogError(error);
+  }
+}
+
+async function renameCatalogItem(item) {
+  const spec = CATALOGS[catalogKind];
+  const name = await askPrompt(spec.renameTitle, "Rename", item.name);
+  if (name == null) return;
+  try {
+    await invoke(spec.rename, { id: item.id, name });
+    if (catalogKind === "list") {
+      if (viewState.kind === "list" && viewState.id === item.id) viewState.name = name.trim();
+    } else if (viewState.kind === catalogKind && viewState.name === item.name) {
+      viewState.name = name.trim();
+    }
+    catalogStatus.textContent = "";
+    await reload();
+  } catch (error) {
+    catalogError(error);
+  }
+}
+
+async function removeCatalogItem(item) {
+  const spec = CATALOGS[catalogKind];
+  const confirmed = await askConfirm(spec.deleteTitle, spec.deleteMessage(item.name), "Delete");
+  if (!confirmed) return;
+  const items = spec.items();
+  const index = items.findIndex((entry) => entry.id === item.id);
+  const neighbor = items[index + 1] || items[index - 1];
+  try {
+    await invoke(spec.remove, { id: item.id });
+    catalogSelection = neighbor && neighbor.id !== item.id ? neighbor.id : null;
+    if (catalogKind === "list") {
+      if (viewState.kind === "list" && viewState.id === item.id) viewState.kind = "all";
+    } else if (viewState.kind === catalogKind && viewState.name === item.name) {
+      viewState.kind = "all";
+    }
+    catalogStatus.textContent = "";
+    await reload();
+  } catch (error) {
+    catalogError(error);
+  }
+}
+
+async function moveCatalogItem(direction) {
+  const spec = CATALOGS[catalogKind];
+  if (catalogSelection == null) return;
+  const items = spec.items();
+  const index = items.findIndex((item) => item.id === catalogSelection);
+  if (index < 0 || index + direction < 0 || index + direction >= items.length) return;
+  try {
+    await invoke(spec.move, { id: catalogSelection, direction });
+    catalogStatus.textContent = "";
+    await reload();
+  } catch (error) {
+    catalogError(error);
   }
 }
 
@@ -917,25 +1128,36 @@ function bind() {
   applyZoom();
   document.querySelector("#zoom-out").addEventListener("click", () => setZoom(zoomLevel - 1));
   document.querySelector("#zoom-in").addEventListener("click", () => setZoom(zoomLevel + 1));
-  document.querySelector("#new-list").addEventListener("click", async () => {
-    const name = await askPrompt("New list", "Create", "");
-    if (name == null) return;
-    try {
-      const list = await invoke("create_list", { name });
-      viewState.kind = "list";
-      viewState.id = list.id;
-      viewState.name = list.name;
-      await reload();
-    } catch (error) {
-      toast(errorText(error));
+  document.querySelector("#manage-categories").addEventListener("click", () => openCatalog("category"));
+  document.querySelector("#manage-tags").addEventListener("click", () => openCatalog("tag"));
+  document.querySelector("#manage-lists").addEventListener("click", () => openCatalog("list"));
+  document.querySelector("#catalog-add").addEventListener("click", () => {
+    runCatalog(() => addCatalogItem()).catch(catalogError);
+  });
+  document.querySelector("#catalog-up").addEventListener("click", () => {
+    runCatalog(() => moveCatalogItem(-1)).catch(catalogError);
+  });
+  document.querySelector("#catalog-down").addEventListener("click", () => {
+    runCatalog(() => moveCatalogItem(1)).catch(catalogError);
+  });
+  document.querySelector("#catalog-close").addEventListener("click", () => {
+    hideCatalogMenu();
+    catalogDialog.close();
+  });
+  document.querySelector("#catalog-form").addEventListener("submit", (event) => {
+    event.preventDefault();
+  });
+  catalogDialog.addEventListener("click", (event) => {
+    if (!catalogMenu.hidden && !catalogMenu.contains(event.target)) hideCatalogMenu();
+  });
+  catalogDialog.addEventListener("cancel", (event) => {
+    if (!catalogMenu.hidden) {
+      event.preventDefault();
+      hideCatalogMenu();
     }
   });
-  document.querySelector("#new-category").addEventListener("click", () => {
-    addCatalogName("New category", "Add", "create_category");
-  });
-  document.querySelector("#new-tag").addEventListener("click", () => {
-    addCatalogName("New tag", "Add", "create_tag");
-  });
+  catalogDialog.addEventListener("close", hideCatalogMenu);
+  catalogList.addEventListener("scroll", hideCatalogMenu, { passive: true });
   document.querySelector("#add-book").addEventListener("click", () => openBookDialog(null));
   for (const swatch of document.querySelectorAll("#book-colors .swatch")) {
     swatch.addEventListener("click", () => selectColor(swatch.dataset.color));

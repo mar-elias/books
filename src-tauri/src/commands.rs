@@ -309,14 +309,14 @@ pub fn delete_book(state: State<AppState>, id: i64) -> Result<(), String> {
 }
 
 #[tauri::command]
-pub fn create_category(state: State<AppState>, name: String) -> Result<(), String> {
+pub fn create_category(state: State<AppState>, name: String) -> Result<db::NameCount, String> {
     create_catalog_name(&state, name, "Enter a category name.", |library, name| {
         library.create_category(name)
     })
 }
 
 #[tauri::command]
-pub fn create_tag(state: State<AppState>, name: String) -> Result<(), String> {
+pub fn create_tag(state: State<AppState>, name: String) -> Result<db::NameCount, String> {
     create_catalog_name(&state, name, "Enter a tag name.", |library, name| {
         library.create_tag(name)
     })
@@ -326,44 +326,110 @@ fn create_catalog_name(
     state: &AppState,
     name: String,
     empty: &str,
-    insert: impl FnOnce(&Library, &str) -> Result<(), db::DbError>,
-) -> Result<(), String> {
-    let name = name.trim();
-    if name.is_empty() {
-        return Err(empty.to_string());
-    }
-    with_library(state, |library| insert(library, name).map_err(|err| err.to_string()))
+    insert: impl FnOnce(&Library, &str) -> Result<db::NameCount, db::DbError>,
+) -> Result<db::NameCount, String> {
+    let name = require_name(name, empty)?;
+    with_library(state, |library| {
+        insert(library, &name).map_err(|err| err.to_string())
+    })
 }
 
 #[tauri::command]
 pub fn create_list(state: State<AppState>, name: String) -> Result<BookList, String> {
-    let name = name.trim();
-    if name.is_empty() {
-        return Err("Enter a list name.".to_string());
-    }
-    let name = name.to_string();
+    let name = require_name(name, "Enter a list name.")?;
     with_library(&state, |library| {
         library.create_list(&name).map_err(|err| err.to_string())
     })
 }
 
 #[tauri::command]
-pub fn rename_list(state: State<AppState>, id: i64, name: String) -> Result<(), String> {
-    let name = name.trim();
-    if name.is_empty() {
-        return Err("Enter a list name.".to_string());
-    }
-    let name = name.to_string();
-    with_library(&state, |library| {
-        library.rename_list(id, &name).map_err(|err| err.to_string())
+pub fn rename_category(state: State<AppState>, id: i64, name: String) -> Result<(), String> {
+    let name = require_name(name, "Enter a category name.")?;
+    change_catalog(&state, "category", |library| {
+        library.rename_category(id, &name)
     })
 }
 
 #[tauri::command]
+pub fn rename_tag(state: State<AppState>, id: i64, name: String) -> Result<(), String> {
+    let name = require_name(name, "Enter a tag name.")?;
+    change_catalog(&state, "tag", |library| library.rename_tag(id, &name))
+}
+
+#[tauri::command]
+pub fn rename_list(state: State<AppState>, id: i64, name: String) -> Result<(), String> {
+    let name = require_name(name, "Enter a list name.")?;
+    change_catalog(&state, "list", |library| library.rename_list(id, &name))
+}
+
+#[tauri::command]
+pub fn delete_category(state: State<AppState>, id: i64) -> Result<(), String> {
+    change_catalog(&state, "category", |library| library.delete_category(id))
+}
+
+#[tauri::command]
+pub fn delete_tag(state: State<AppState>, id: i64) -> Result<(), String> {
+    change_catalog(&state, "tag", |library| library.delete_tag(id))
+}
+
+#[tauri::command]
 pub fn delete_list(state: State<AppState>, id: i64) -> Result<(), String> {
-    with_library(&state, |library| {
-        library.delete_list(id).map_err(|err| err.to_string())
+    change_catalog(&state, "list", |library| library.delete_list(id))
+}
+
+#[tauri::command]
+pub fn move_category(state: State<AppState>, id: i64, direction: i32) -> Result<(), String> {
+    move_catalog(&state, "category", direction, |library| {
+        library.move_category(id, direction)
     })
+}
+
+#[tauri::command]
+pub fn move_tag(state: State<AppState>, id: i64, direction: i32) -> Result<(), String> {
+    move_catalog(&state, "tag", direction, |library| {
+        library.move_tag(id, direction)
+    })
+}
+
+#[tauri::command]
+pub fn move_list(state: State<AppState>, id: i64, direction: i32) -> Result<(), String> {
+    move_catalog(&state, "list", direction, |library| {
+        library.move_list(id, direction)
+    })
+}
+
+fn require_name(name: String, empty: &str) -> Result<String, String> {
+    let name = name.trim();
+    if name.is_empty() {
+        Err(empty.to_string())
+    } else {
+        Ok(name.to_string())
+    }
+}
+
+fn change_catalog(
+    state: &AppState,
+    label: &str,
+    action: impl FnOnce(&Library) -> Result<(), db::DbError>,
+) -> Result<(), String> {
+    with_library(state, |library| {
+        action(library).map_err(|err| match err {
+            db::DbError::NotFound => format!("That {label} is no longer in the library"),
+            other => other.to_string(),
+        })
+    })
+}
+
+fn move_catalog(
+    state: &AppState,
+    label: &str,
+    direction: i32,
+    action: impl FnOnce(&Library) -> Result<(), db::DbError>,
+) -> Result<(), String> {
+    if direction != -1 && direction != 1 {
+        return Err("Choose up or down.".to_string());
+    }
+    change_catalog(state, label, action)
 }
 
 #[tauri::command]

@@ -130,7 +130,11 @@ aside {
 .section-row .section { margin: 0 0 0 12px; }
 
 button.icon {
-  width: 28px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 28px;
   padding: 0;
   font-size: 18px;
   line-height: 1;
@@ -755,7 +759,7 @@ dialog input[type="text"], dialog textarea { width: 100%; box-sizing: border-box
   padding: 6px 8px;
 }
 
-#book-status, #confirm-message {
+#book-status, #confirm-message, #catalog-status {
   margin: 8px 0 0;
   color: var(--muted);
   overflow: hidden;
@@ -791,3 +795,114 @@ dialog input[type="text"], dialog textarea { width: 100%; box-sizing: border-box
   border-color: var(--danger);
   color: var(--accent-ink);
 }
+
+#catalog-dialog {
+  width: min(420px, calc(100% - 32px));
+  overflow: visible;
+}
+
+.catalog-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.catalog-head h2 { margin: 0; }
+
+#catalog-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-height: 180px;
+  max-height: min(360px, 50vh);
+  margin-top: 14px;
+  overflow: auto;
+  border: 1px solid var(--line);
+  background: var(--sheet);
+  padding: 4px;
+}
+
+.catalog-empty {
+  margin: 0;
+  padding: 48px 12px;
+  text-align: center;
+  color: var(--muted);
+}
+
+.catalog-row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  border-radius: 8px;
+}
+
+.catalog-row.selected {
+  background: var(--ink);
+  color: #fff;
+}
+
+.catalog-row:hover:not(.selected) { background: var(--sidebar); }
+
+.catalog-name, .catalog-more {
+  background: transparent;
+  border: 0;
+}
+
+.catalog-name {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
+  min-width: 0;
+  text-align: left;
+  padding: 8px 4px 8px 10px;
+}
+
+.catalog-more {
+  flex: none;
+  padding: 8px 10px;
+  color: var(--muted);
+}
+
+.catalog-row.selected .catalog-more,
+.catalog-row.selected .count { color: #fff; }
+
+#catalog-up, #catalog-down {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 32px;
+  padding: 0;
+}
+
+#catalog-up svg, #catalog-down svg { display: block; }
+
+#catalog-dialog button:disabled {
+  color: var(--muted);
+  cursor: default;
+}
+
+#catalog-menu {
+  position: absolute;
+  z-index: 2;
+  min-width: 140px;
+  padding: 4px;
+  background: var(--sheet);
+  border: 1px solid var(--line);
+  box-shadow: var(--shadow);
+}
+
+#catalog-menu button {
+  display: block;
+  width: 100%;
+  text-align: left;
+  background: transparent;
+  border: 0;
+  white-space: nowrap;
+}
+
+#catalog-menu button:hover { background: var(--sidebar); }
+
+#catalog-menu button.danger { color: var(--danger); }

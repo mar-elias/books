@@ -15,17 +15,17 @@
         <nav id="library-nav" aria-label="Library"></nav>
         <div class="section-row">
           <p class="section"><b>Categories</b></p>
-          <button id="new-category" class="text icon" type="button" aria-label="Add category">+</button>
+          <button id="manage-categories" class="text icon" type="button" aria-label="Manage categories">···</button>
         </div>
         <nav id="category-nav" aria-label="Categories"></nav>
         <div class="section-row">
           <p class="section"><b>Tags</b></p>
-          <button id="new-tag" class="text icon" type="button" aria-label="Add tag">+</button>
+          <button id="manage-tags" class="text icon" type="button" aria-label="Manage tags">···</button>
         </div>
         <nav id="tag-nav" aria-label="Tags"></nav>
         <div class="section-row">
           <p class="section"><b>Lists</b></p>
-          <button id="new-list" class="text icon" type="button" aria-label="New list">+</button>
+          <button id="manage-lists" class="text icon" type="button" aria-label="Manage lists">···</button>
         </div>
         <div id="list-nav"></div>
         </div>
@@ -86,17 +86,17 @@
               <button type="button" class="swatch" data-color="#fce94f" aria-label="#fce94f"></button>
             </div>
           </div>
-          <div class="picker" id="category-picker" data-empty="Add one with + in the sidebar.">
+          <div class="picker" id="category-picker" data-empty="Add one from the Categories menu.">
             <span>Categories</span>
             <button type="button" class="picker-button"><span>None</span></button>
             <div class="picker-menu" hidden></div>
           </div>
-          <div class="picker" id="tag-picker" data-empty="Add one with + in the sidebar.">
+          <div class="picker" id="tag-picker" data-empty="Add one from the Tags menu.">
             <span>Tags</span>
             <button type="button" class="picker-button"><span>None</span></button>
             <div class="picker-menu" hidden></div>
           </div>
-          <div class="picker wide" id="list-picker" data-empty="No lists yet.">
+          <div class="picker wide" id="list-picker" data-empty="Add one from the Lists menu.">
             <span>Lists</span>
             <button type="button" class="picker-button"><span>None</span></button>
             <div class="picker-menu" hidden></div>
@@ -160,6 +160,33 @@
           <button id="settings-close" class="primary" type="button">Save</button>
         </div>
       </form>
+    </dialog>
+
+    <dialog id="catalog-dialog">
+      <form id="catalog-form">
+        <div class="catalog-head">
+          <h2 id="catalog-title">Categories</h2>
+          <button id="catalog-add" class="text icon" type="button" aria-label="Add">+</button>
+        </div>
+        <div id="catalog-list"></div>
+        <p id="catalog-status"></p>
+        <div class="dialog-actions">
+          <button id="catalog-up" type="button" aria-label="Move up">
+            <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true">
+              <path fill="currentColor" d="M8 3.2 2.8 10.2h10.4L8 3.2Z" />
+            </svg>
+          </button>
+          <button id="catalog-down" type="button" aria-label="Move down">
+            <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true">
+              <path fill="currentColor" d="M8 12.8 13.2 5.8H2.8L8 12.8Z" />
+            </svg>
+          </button>
+          <span class="dialog-actions-end">
+            <button id="catalog-close" class="primary" type="button">Close</button>
+          </span>
+        </div>
+      </form>
+      <div id="catalog-menu" role="menu" hidden></div>
     </dialog>
 
     <script src="app.js"></script>
