@@ -14,6 +14,27 @@
   font-family: "Liberation Sans", "Nimbus Sans", sans-serif;
 }
 
+* {
+  box-sizing: border-box;
+  scrollbar-width: thick;
+  scrollbar-color: #000000;
+}
+
+*::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+    background: #ffffff;
+}
+
+*::-webkit-scrollbar-track,
+*::-webkit-scrollbar-corner {
+    background: #ffffff;
+}
+
+*::-webkit-scrollbar-thumb {
+    background: #000000;
+}
+
 [hidden] { display: none !important; }
 
 html, body {
