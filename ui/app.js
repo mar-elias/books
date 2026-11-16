@@ -31,7 +31,15 @@ const ZOOM_WIDTHS = [112, 136, 160, 192, 232, 280, 336];
 const ZOOM_DEFAULT = 2;
 const ZOOM_KEY = "books-zoom";
 const SORT_KEY = "books-sort";
-const BOOK_SORTS = new Set(["title", "added-desc", "added-asc", "modified-desc", "modified-asc"]);
+const BOOK_SORTS = new Set([
+  "title",
+  "added-desc",
+  "added-asc",
+  "modified-desc",
+  "modified-asc",
+  "rating-desc",
+  "rating-asc",
+]);
 const SORT_ALIASES = { newest: "added-desc", oldest: "added-asc" };
 let zoomLevel = storedZoom();
 let bookSort = storedBookSort();
@@ -174,8 +182,20 @@ function formatBookDate(value) {
   });
 }
 
+function bookRating(book) {
+  return Number.isInteger(book.rating) && book.rating >= 0 && book.rating <= 5 ? book.rating : null;
+}
+
 function compareBooks(a, b) {
-  if (bookSort !== "title") {
+  if (bookSort.startsWith("rating")) {
+    const ratingA = bookRating(a);
+    const ratingB = bookRating(b);
+    if (ratingA == null && ratingB != null) return 1;
+    if (ratingA != null && ratingB == null) return -1;
+    if (ratingA != null && ratingB != null && ratingA !== ratingB) {
+      return bookSort.endsWith("desc") ? ratingB - ratingA : ratingA - ratingB;
+    }
+  } else if (bookSort !== "title") {
     const stampA = bookStamp(a);
     const stampB = bookStamp(b);
     if (stampA == null && stampB != null) return 1;
@@ -543,6 +563,23 @@ function clearBookSelection() {
   }
 }
 
+function ratingMark(score) {
+  const mark = document.createElement("span");
+  mark.className = "rating-mark";
+  mark.setAttribute("aria-label", `Rating ${score}`);
+  const star = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+  star.setAttribute("viewBox", "0 0 12 12");
+  star.setAttribute("aria-hidden", "true");
+  const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
+  path.setAttribute("fill", "currentColor");
+  path.setAttribute("d", "M6 .9 7.5 4.5h3.8L8.3 6.8l1 3.7L6 8.5 2.7 10.5l1-3.7L.7 4.5h3.8Z");
+  star.append(path);
+  const value = document.createElement("span");
+  value.textContent = String(score);
+  mark.append(star, value);
+  return mark;
+}
+
 function bookTile(book) {
   const article = document.createElement("article");
   article.className = "book";
@@ -559,6 +596,7 @@ function bookTile(book) {
   badge.className = "badge";
   badge.textContent = book.formatLabel;
   if (!book.formatLabel) badge.hidden = true;
+  const score = bookRating(book);
   const title = document.createElement("p");
   title.className = "book-title";
   title.dir = "auto";
@@ -567,6 +605,7 @@ function bookTile(book) {
   if (BOOK_COLORS.has(book.color)) label.style.backgroundColor = book.color;
   title.append(label);
   frame.append(image, badge);
+  if (score != null) frame.append(ratingMark(score));
   article.append(frame, title);
   article.addEventListener("click", () => selectBook(book.id));
   article.addEventListener("dblclick", () => openBook(book.id));
@@ -765,6 +804,7 @@ function openBookDialog(book) {
   document.querySelector("#field-modified").value = book ? formatBookDate(book.modifiedAt) : "";
   document.querySelector("#field-notes").value = book && book.notes ? book.notes : "";
   selectColor(book && book.color ? book.color : "");
+  selectRating(book ? book.rating : null);
   renderPicker(
     document.querySelector("#category-picker"),
     categories.map((item) => ({ value: item.name, label: item.name })),
@@ -808,6 +848,7 @@ async function saveBook(event) {
     categories: chosenValues(document.querySelector("#category-picker")).join(", "),
     tags: chosenValues(document.querySelector("#tag-picker")).join(", "),
     color: chosenColor(),
+    rating: chosenRating(),
     notes: document.querySelector("#field-notes").value,
   };
   const listIds = chosenValues(document.querySelector("#list-picker")).map(Number);
@@ -871,6 +912,18 @@ function selectColor(color) {
 function chosenColor() {
   const swatch = document.querySelector("#book-colors .swatch[aria-pressed='true']");
   return swatch ? swatch.dataset.color : "";
+}
+
+function selectRating(rating) {
+  const chosen = bookRating({ rating }) == null ? "" : String(rating);
+  for (const button of document.querySelectorAll("#book-rating .rating")) {
+    button.setAttribute("aria-pressed", button.dataset.rating === chosen ? "true" : "false");
+  }
+}
+
+function chosenRating() {
+  const button = document.querySelector("#book-rating .rating[aria-pressed='true']");
+  return button ? button.dataset.rating : "";
 }
 
 function closePickers(except) {
@@ -1201,6 +1254,9 @@ function bind() {
   document.querySelector("#add-book").addEventListener("click", () => openBookDialog(null));
   for (const swatch of document.querySelectorAll("#book-colors .swatch")) {
     swatch.addEventListener("click", () => selectColor(swatch.dataset.color));
+  }
+  for (const button of document.querySelectorAll("#book-rating .rating")) {
+    button.addEventListener("click", () => selectRating(button.dataset.rating === "" ? null : Number(button.dataset.rating)));
   }
   for (const picker of document.querySelectorAll(".picker")) {
     const button = picker.querySelector(".picker-button");

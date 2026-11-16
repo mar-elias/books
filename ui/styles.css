@@ -451,6 +451,22 @@ input[type="search"] { width: 220px; }
   padding: 2px 5px;
 }
 
+.rating-mark {
+  position: absolute;
+  top: 6px;
+  left: 6px;
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  background: rgba(36, 31, 26, 0.82);
+  color: var(--accent-ink);
+  font-size: calc(var(--book-width) * 0.075);
+  line-height: 1;
+  padding: 3px 5px;
+}
+
+.rating-mark svg { display: block; width: 1em; height: 1em; }
+
 .book-title {
   margin: 8px 0 0;
   max-width: 100%;
@@ -722,7 +738,7 @@ dialog input[type="text"], dialog textarea { width: 100%; box-sizing: border-box
 .book-fields > .detail-row,
 .book-fields > .date-fields,
 .book-fields > .choice-fields,
-.book-fields > .color-field { grid-column: 1 / -1; }
+.book-fields > .mark-fields { grid-column: 1 / -1; }
 
 .date-fields {
   display: grid;
@@ -755,7 +771,15 @@ dialog input[type="text"], dialog textarea { width: 100%; box-sizing: border-box
 
 @container (max-width: 620px) {
   .book-fields,
-  .detail-row { grid-template-columns: 1fr; }
+  .detail-row,
+  .mark-fields { grid-template-columns: 1fr; }
+}
+
+.mark-fields {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  column-gap: 24px;
+  align-items: start;
 }
 
 .color-field {
@@ -796,6 +820,27 @@ dialog input[type="text"], dialog textarea { width: 100%; box-sizing: border-box
 .swatch[aria-pressed="true"] {
   outline: 2px solid var(--ink);
   outline-offset: 2px;
+}
+
+.rating-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: 12px;
+}
+
+.ratings { display: flex; gap: 6px; }
+
+.rating {
+  width: 28px;
+  height: 28px;
+  padding: 0;
+}
+
+.rating[aria-pressed="true"] {
+  background: var(--ink);
+  color: var(--paper);
+  border-color: var(--ink);
 }
 
 .picker {

@@ -35,6 +35,7 @@ pub struct BookForm {
     pub tags: String,
     pub color: String,
     pub notes: String,
+    pub rating: String,
 }
 
 #[derive(Debug, Serialize)]
@@ -112,6 +113,7 @@ pub fn form_to_draft(form: BookForm, keep_cover: Option<Vec<u8>>) -> Result<Draf
     let author = form.author.trim().to_string();
     let color = parse_color(&form.color)?;
     let notes = form.notes.trim().to_string();
+    let rating = parse_rating(&form.rating)?;
     let cover = cover_bytes(&form.cover_path, &file_path, &title, &author, keep_cover)?;
     Ok(Draft {
         title,
@@ -124,7 +126,19 @@ pub fn form_to_draft(form: BookForm, keep_cover: Option<Vec<u8>>) -> Result<Draf
         cover_png: cover,
         color,
         notes,
+        rating,
     })
+}
+
+fn parse_rating(value: &str) -> Result<Option<i32>, String> {
+    let value = value.trim();
+    if value.is_empty() {
+        return Ok(None);
+    }
+    match value.parse::<i32>() {
+        Ok(score) if (0..=5).contains(&score) => Ok(Some(score)),
+        _ => Err("Rating should be from 0 to 5.".to_string()),
+    }
 }
 
 const BOOK_COLORS: &[&str] = &[
@@ -695,6 +709,16 @@ fn book_id_from_path(path: &str) -> Option<i64> {
 mod tests {
     use super::*;
 
+    #[test]
+    fn rating_accepts_zero_through_five() {
+        assert_eq!(parse_rating("").unwrap(), None);
+        assert_eq!(parse_rating(" 4 ").unwrap(), Some(4));
+        assert_eq!(parse_rating("0").unwrap(), Some(0));
+        assert_eq!(parse_rating("5").unwrap(), Some(5));
+        assert!(parse_rating("6").is_err());
+        assert!(parse_rating("nope").is_err());
+    }
+
     fn form(title: &str, year: &str, path: &str, cover: &str) -> BookForm {
         BookForm {
             title: title.to_string(),
@@ -706,6 +730,7 @@ mod tests {
             tags: "unread".to_string(),
             color: String::new(),
             notes: String::new(),
+            rating: String::new(),
         }
     }
 
