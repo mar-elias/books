@@ -540,13 +540,48 @@ pub fn remove_book_from_list(state: State<AppState>, list_id: i64, book_id: i64)
     })
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+const BOOK_SORTS: &[&str] = &[
+    "title",
+    "added-desc",
+    "added-asc",
+    "modified-desc",
+    "modified-asc",
+    "rating-desc",
+    "rating-asc",
+];
+const ZOOM_MAX: i32 = 6;
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SidebarSections {
+    #[serde(default = "default_open")]
+    pub category: bool,
+    #[serde(default = "default_open")]
+    pub tag: bool,
+}
+
+impl Default for SidebarSections {
+    fn default() -> Self {
+        Self {
+            category: true,
+            tag: true,
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct AppSettings {
     #[serde(default = "default_reader")]
     pub reader: String,
     #[serde(default = "default_file_manager")]
     pub file_manager: String,
+    #[serde(default = "default_zoom")]
+    pub zoom: i32,
+    #[serde(default = "default_book_sort")]
+    pub book_sort: String,
+    #[serde(default)]
+    pub sidebar: SidebarSections,
 }
 
 impl Default for AppSettings {
@@ -554,6 +589,9 @@ impl Default for AppSettings {
         Self {
             reader: default_reader(),
             file_manager: default_file_manager(),
+            zoom: default_zoom(),
+            book_sort: default_book_sort(),
+            sidebar: SidebarSections::default(),
         }
     }
 }
@@ -566,11 +604,24 @@ fn default_file_manager() -> String {
     "/usr/local/bin/dolphin".to_string()
 }
 
+fn default_zoom() -> i32 {
+    2
+}
+
+fn default_book_sort() -> String {
+    "title".to_string()
+}
+
+fn default_open() -> bool {
+    true
+}
+
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SettingsView {
     pub database_path: String,
     pub covers_path: String,
+    pub settings_path: String,
     pub reader: String,
     pub file_manager: String,
 }
@@ -582,12 +633,32 @@ pub struct SettingsForm {
     pub file_manager: String,
 }
 
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ViewSettingsSeed {
+    #[serde(default)]
+    pub zoom: Option<i32>,
+    #[serde(default)]
+    pub book_sort: Option<String>,
+    #[serde(default)]
+    pub sidebar: Option<SidebarSections>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ViewSettingsForm {
+    pub zoom: i32,
+    pub book_sort: String,
+    pub sidebar: SidebarSections,
+}
+
 #[tauri::command]
 pub fn app_settings() -> Result<SettingsView, String> {
     let settings = load_settings()?;
     Ok(SettingsView {
         database_path: db::database_path().to_string_lossy().into_owned(),
         covers_path: db::covers_dir().to_string_lossy().into_owned(),
+        settings_path: db::settings_path().to_string_lossy().into_owned(),
         reader: settings.reader,
         file_manager: settings.file_manager,
     })
@@ -595,11 +666,17 @@ pub fn app_settings() -> Result<SettingsView, String> {
 
 #[tauri::command]
 pub fn save_app_settings(settings: SettingsForm) -> Result<(), String> {
-    let saved = AppSettings {
-        reader: clean_command(&settings.reader, "Enter a program for opening books.")?,
-        file_manager: clean_command(&settings.file_manager, "Enter a file manager.")?,
-    };
-    save_settings_to(&db::settings_path(), &saved)
+    save_app_settings_to(&db::settings_path(), &settings)
+}
+
+#[tauri::command]
+pub fn prepare_settings(seed: ViewSettingsSeed) -> Result<AppSettings, String> {
+    prepare_settings_at(&db::settings_path(), &seed)
+}
+
+#[tauri::command]
+pub fn save_view_settings(settings: ViewSettingsForm) -> Result<(), String> {
+    save_view_settings_to(&db::settings_path(), &settings)
 }
 
 #[tauri::command]
@@ -645,18 +722,172 @@ fn load_settings() -> Result<AppSettings, String> {
 
 fn load_settings_from(path: &Path) -> Result<AppSettings, String> {
     match std::fs::read_to_string(path) {
-        Ok(text) => serde_json::from_str(&text).map_err(|_| "Could not read settings.".to_string()),
+        Ok(text) => parse_settings(&text),
         Err(err) if err.kind() == std::io::ErrorKind::NotFound => Ok(AppSettings::default()),
         Err(err) => Err(err.to_string()),
     }
 }
 
+fn parse_settings(text: &str) -> Result<AppSettings, String> {
+    let settings: AppSettings =
+        serde_json::from_str(text).map_err(|_| "Could not read settings.".to_string())?;
+    Ok(normalize_settings(settings))
+}
+
 fn save_settings_to(path: &Path, settings: &AppSettings) -> Result<(), String> {
+    let value = serde_json::to_value(settings).map_err(|err| err.to_string())?;
+    write_settings_value(path, &value)
+}
+
+fn save_app_settings_to(path: &Path, settings: &SettingsForm) -> Result<(), String> {
+    let mut object = read_settings_object(path)?;
+    object.insert(
+        "reader".to_string(),
+        serde_json::json!(clean_command(&settings.reader, "Enter a program for opening books.")?),
+    );
+    object.insert(
+        "fileManager".to_string(),
+        serde_json::json!(clean_command(&settings.file_manager, "Enter a file manager.")?),
+    );
+    write_settings_value(path, &serde_json::Value::Object(object))
+}
+
+fn save_view_settings_to(path: &Path, settings: &ViewSettingsForm) -> Result<(), String> {
+    let mut object = read_settings_object(path)?;
+    object.insert("zoom".to_string(), serde_json::json!(clamp_zoom(settings.zoom)));
+    object.insert(
+        "bookSort".to_string(),
+        serde_json::json!(canonical_sort(&settings.book_sort)),
+    );
+    object.insert(
+        "sidebar".to_string(),
+        serde_json::to_value(&settings.sidebar).map_err(|err| err.to_string())?,
+    );
+    write_settings_value(path, &serde_json::Value::Object(object))
+}
+
+fn prepare_settings_at(path: &Path, seed: &ViewSettingsSeed) -> Result<AppSettings, String> {
+    let mut object = read_settings_object(path)?;
+    let mut changed = !path.exists();
+    if !object.contains_key("reader") {
+        object.insert("reader".to_string(), serde_json::json!(default_reader()));
+        changed = true;
+    }
+    if !object.contains_key("fileManager") {
+        object.insert(
+            "fileManager".to_string(),
+            serde_json::json!(default_file_manager()),
+        );
+        changed = true;
+    }
+    if !object.contains_key("zoom") {
+        let zoom = seed.zoom.unwrap_or_else(default_zoom);
+        object.insert("zoom".to_string(), serde_json::json!(clamp_zoom(zoom)));
+        changed = true;
+    }
+    if !object.contains_key("bookSort") {
+        let sort = seed
+            .book_sort
+            .as_deref()
+            .map(canonical_sort)
+            .unwrap_or_else(default_book_sort);
+        object.insert("bookSort".to_string(), serde_json::json!(sort));
+        changed = true;
+    }
+    if !object.contains_key("sidebar") {
+        let sidebar = seed.sidebar.clone().unwrap_or_default();
+        object.insert(
+            "sidebar".to_string(),
+            serde_json::to_value(&sidebar).map_err(|err| err.to_string())?,
+        );
+        changed = true;
+    } else if sidebar_is_partial(object.get("sidebar")) {
+        changed = true;
+    }
+    let parsed: AppSettings = serde_json::from_value(serde_json::Value::Object(object))
+        .map_err(|_| "Could not read settings.".to_string())?;
+    let mut settings = normalize_settings(parsed.clone());
+    if settings != parsed {
+        changed = true;
+    }
+    if changed {
+        keep_latest_commands(path, &mut settings);
+        save_settings_to(path, &settings)?;
+    }
+    Ok(settings)
+}
+
+fn keep_latest_commands(path: &Path, settings: &mut AppSettings) {
+    let Ok(latest) = read_settings_object(path) else {
+        return;
+    };
+    if let Some(reader) = latest.get("reader").and_then(|value| value.as_str()) {
+        if !reader.trim().is_empty() {
+            settings.reader = reader.to_string();
+        }
+    }
+    if let Some(file_manager) = latest.get("fileManager").and_then(|value| value.as_str()) {
+        if !file_manager.trim().is_empty() {
+            settings.file_manager = file_manager.to_string();
+        }
+    }
+}
+
+fn sidebar_is_partial(value: Option<&serde_json::Value>) -> bool {
+    let Some(sidebar) = value.and_then(|value| value.as_object()) else {
+        return true;
+    };
+    !sidebar.contains_key("category") || !sidebar.contains_key("tag")
+}
+
+fn read_settings_object(path: &Path) -> Result<serde_json::Map<String, serde_json::Value>, String> {
+    match std::fs::read_to_string(path) {
+        Ok(text) => {
+            let value: serde_json::Value =
+                serde_json::from_str(&text).map_err(|_| "Could not read settings.".to_string())?;
+            value
+                .as_object()
+                .cloned()
+                .ok_or_else(|| "Could not read settings.".to_string())
+        }
+        Err(err) if err.kind() == std::io::ErrorKind::NotFound => Ok(serde_json::Map::new()),
+        Err(err) => Err(err.to_string()),
+    }
+}
+
+fn write_settings_value(path: &Path, value: &serde_json::Value) -> Result<(), String> {
     if let Some(parent) = path.parent() {
         std::fs::create_dir_all(parent).map_err(|err| err.to_string())?;
     }
-    let text = serde_json::to_string_pretty(settings).map_err(|err| err.to_string())?;
+    let text = serde_json::to_string_pretty(value).map_err(|err| err.to_string())?;
     std::fs::write(path, format!("{text}\n")).map_err(|err| err.to_string())
+}
+
+fn normalize_settings(mut settings: AppSettings) -> AppSettings {
+    settings.zoom = clamp_zoom(settings.zoom);
+    settings.book_sort = canonical_sort(&settings.book_sort);
+    settings
+}
+
+fn clamp_zoom(zoom: i32) -> i32 {
+    if (0..=ZOOM_MAX).contains(&zoom) {
+        zoom
+    } else {
+        default_zoom()
+    }
+}
+
+fn canonical_sort(value: &str) -> String {
+    let value = match value {
+        "newest" => "added-desc",
+        "oldest" => "added-asc",
+        other => other,
+    };
+    if BOOK_SORTS.contains(&value) {
+        value.to_string()
+    } else {
+        default_book_sort()
+    }
 }
 
 fn clean_command(value: &str, empty: &str) -> Result<String, String> {
@@ -995,22 +1226,93 @@ mod tests {
     fn settings_roundtrip_and_defaults() {
         let dir = temp_dir();
         let missing = load_settings_from(&dir.join("absent.json")).unwrap();
-        assert_eq!(missing.reader, "okular");
-        assert_eq!(missing.file_manager, "xdg-open");
+        assert_eq!(missing, AppSettings::default());
+        assert_eq!(missing.reader, "/usr/bin/okular");
+        assert_eq!(missing.file_manager, "/usr/local/bin/dolphin");
+        assert_eq!(missing.zoom, 2);
+        assert_eq!(missing.book_sort, "title");
+        assert!(missing.sidebar.category && missing.sidebar.tag);
 
         let path = dir.join("settings.json");
-        save_settings_to(
+        let mut stored = AppSettings::default();
+        stored.reader = "ebook-viewer".to_string();
+        stored.file_manager = "dolphin".to_string();
+        stored.zoom = 4;
+        stored.book_sort = "rating-desc".to_string();
+        stored.sidebar.tag = false;
+        save_settings_to(&path, &stored).unwrap();
+        let loaded = load_settings_from(&path).unwrap();
+        assert_eq!(loaded, stored);
+        assert!(clean_command("  ", "Enter a program for opening books.").is_err());
+        let _ = std::fs::remove_dir_all(dir);
+    }
+
+    #[test]
+    fn prepare_settings_keeps_the_file_and_fills_view_preferences() {
+        let dir = temp_dir();
+        let path = dir.join("settings.json");
+        std::fs::write(&path, "{\n  \"reader\": \"ebook-viewer\"\n}\n").unwrap();
+        let seed = ViewSettingsSeed {
+            zoom: Some(5),
+            book_sort: Some("newest".to_string()),
+            sidebar: Some(SidebarSections {
+                category: false,
+                tag: true,
+            }),
+        };
+        let prepared = prepare_settings_at(&path, &seed).unwrap();
+        assert_eq!(prepared.reader, "ebook-viewer");
+        assert_eq!(prepared.file_manager, "/usr/local/bin/dolphin");
+        assert_eq!(prepared.zoom, 5);
+        assert_eq!(prepared.book_sort, "added-desc");
+        assert!(!prepared.sidebar.category);
+        assert!(prepared.sidebar.tag);
+
+        let again = prepare_settings_at(
             &path,
-            &AppSettings {
-                reader: "ebook-viewer".to_string(),
+            &ViewSettingsSeed {
+                zoom: Some(0),
+                book_sort: Some("title".to_string()),
+                sidebar: Some(SidebarSections::default()),
+            },
+        )
+        .unwrap();
+        assert_eq!(again.zoom, 5);
+        assert_eq!(again.book_sort, "added-desc");
+        assert!(!again.sidebar.category);
+
+        save_app_settings_to(
+            &path,
+            &SettingsForm {
+                reader: "okular --unique".to_string(),
                 file_manager: "dolphin".to_string(),
             },
         )
         .unwrap();
-        let loaded = load_settings_from(&path).unwrap();
-        assert_eq!(loaded.reader, "ebook-viewer");
-        assert_eq!(loaded.file_manager, "dolphin");
-        assert!(clean_command("  ", "Enter a program for opening books.").is_err());
+        let kept = load_settings_from(&path).unwrap();
+        assert_eq!(kept.reader, "okular --unique");
+        assert_eq!(kept.zoom, 5);
+        assert_eq!(kept.book_sort, "added-desc");
+
+        save_view_settings_to(
+            &path,
+            &ViewSettingsForm {
+                zoom: 9,
+                book_sort: "oldest".to_string(),
+                sidebar: SidebarSections {
+                    category: true,
+                    tag: false,
+                },
+            },
+        )
+        .unwrap();
+        let viewed = load_settings_from(&path).unwrap();
+        assert_eq!(viewed.reader, "okular --unique");
+        assert_eq!(viewed.file_manager, "dolphin");
+        assert_eq!(viewed.zoom, 2);
+        assert_eq!(viewed.book_sort, "added-asc");
+        assert!(viewed.sidebar.category);
+        assert!(!viewed.sidebar.tag);
         let _ = std::fs::remove_dir_all(dir);
     }
 }

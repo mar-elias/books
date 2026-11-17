@@ -50,6 +50,8 @@ pub fn run() {
             commands::open_book_folder,
             commands::app_settings,
             commands::save_app_settings,
+            commands::prepare_settings,
+            commands::save_view_settings,
             commands::library_paths
         ])
         .run(tauri::generate_context!())

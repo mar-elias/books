@@ -200,17 +200,22 @@
     <dialog id="settings-dialog">
       <form id="settings-form">
         <h2>Settings</h2>
+        <h3 class="settings-heading">Default applications</h3>
         <label>Open books with
           <input id="settings-reader" type="text" spellcheck="false" placeholder="/usr/bin/okular" />
         </label>
         <label>File manager
           <input id="settings-file-manager" type="text" spellcheck="false" placeholder="/usr/local/bin/dolphin" />
         </label>
+        <h3 class="settings-heading">Default paths</h3>
         <label>Library database path
           <input id="settings-database" type="text" readonly spellcheck="false" />
         </label>
         <label>Covers folder path (automatically generated)
           <input id="settings-covers" type="text" readonly spellcheck="false" />
+        </label>
+        <label>Settings file path
+          <input id="settings-file" type="text" readonly spellcheck="false" />
         </label>
         <p id="settings-status"></p>
         <div class="dialog-actions">

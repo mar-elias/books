@@ -784,13 +784,26 @@ dialog {
   color: var(--ink);
 }
 
+#settings-dialog .settings-heading {
+  margin: 22px 0 0;
+  font-family: "Arial", sans-serif;
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+#settings-dialog h2 + .settings-heading {
+  margin-top: 2px;
+}
+
 dialog::backdrop { background: rgba(36, 31, 26, 0.35); }
 
 dialog form { padding: 18px 18px 16px; }
 
 dialog h2 {
   margin: 0 0 14px;
-  font-family: Palatino, "Liberation Serif", Georgia, serif;
+  font-family: "Arial", sans-serif;
   font-size: 24px;
   font-weight: 600;
 }

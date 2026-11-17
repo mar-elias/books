@@ -54,7 +54,7 @@ Okular is used to open books; if it is not installed, the file opens with `xdg-o
 # Storage:
 Library database: `/home/elias/.local/share/ebook-reader/library.db`
 
-The zoom step is saved in the web view’s localStorage file: `/home/elias/.local/share/com.local.books/` WebKit creates the file the first time the desktop app uses localStorage. It is not there yet. Inside it, the row key is books-zoom, and the value is the step index 0–6 (2 is 100%).
+Settings are stored in `/home/elias/.config/ebook-reader/settings.json`: the reader, the file manager, the zoom step (0–6, where 2 is 100%), the book sort, and whether the Categories and Tags sections are open.
 
 #Similar apps:
 1. https://github.com/everydaythingssoftware/citadel

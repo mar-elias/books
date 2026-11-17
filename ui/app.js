@@ -43,9 +43,11 @@ const BOOK_SORTS = new Set([
   "rating-asc",
 ]);
 const SORT_ALIASES = { newest: "added-desc", oldest: "added-asc" };
-let zoomLevel = storedZoom();
-let bookSort = storedBookSort();
-const sidebarOpen = storedSidebar();
+let zoomLevel = ZOOM_DEFAULT;
+let bookSort = "title";
+const sidebarOpen = { category: true, tag: true };
+const viewEdits = { zoom: false, sort: false, sidebar: false };
+let viewReady = false;
 
 const libraryNav = document.querySelector("#library-nav");
 const categoryNav = document.querySelector("#category-nav");
@@ -137,43 +139,92 @@ function query() {
   return search.trim().toLowerCase();
 }
 
-function storedZoom() {
-  try {
-    const raw = localStorage.getItem(ZOOM_KEY);
-    if (raw == null) return ZOOM_DEFAULT;
-    const stored = Number(raw);
-    if (Number.isInteger(stored) && stored >= 0 && stored < ZOOM_WIDTHS.length) return stored;
-  } catch (_error) {
-    /* keep the default size when storage is unavailable */
-  }
+function clampZoom(value) {
+  const zoom = Number(value);
+  if (Number.isInteger(zoom) && zoom >= 0 && zoom < ZOOM_WIDTHS.length) return zoom;
   return ZOOM_DEFAULT;
 }
 
-function storedBookSort() {
-  try {
-    const raw = localStorage.getItem(SORT_KEY);
-    const stored = SORT_ALIASES[raw] || raw;
-    if (BOOK_SORTS.has(stored)) return stored;
-  } catch (_error) {
-    /* keep alphabetical order when storage is unavailable */
-  }
-  return "title";
+function canonicalSort(value) {
+  const stored = SORT_ALIASES[value] || value;
+  return BOOK_SORTS.has(stored) ? stored : "title";
 }
 
-function storedSidebar() {
-  const open = { category: true, tag: true };
+function localViewSeed() {
+  const seed = {};
   try {
-    const raw = localStorage.getItem(SIDEBAR_KEY);
-    if (!raw) return open;
-    const stored = JSON.parse(raw);
-    if (stored && typeof stored === "object") {
-      if (stored.category === false) open.category = false;
-      if (stored.tag === false) open.tag = false;
+    const zoom = localStorage.getItem(ZOOM_KEY);
+    if (zoom != null) seed.zoom = clampZoom(Number(zoom));
+    const sort = localStorage.getItem(SORT_KEY);
+    if (sort != null) seed.bookSort = canonicalSort(sort);
+    const sidebar = localStorage.getItem(SIDEBAR_KEY);
+    if (sidebar != null) {
+      const stored = JSON.parse(sidebar);
+      seed.sidebar = {
+        category: !stored || stored.category !== false,
+        tag: !stored || stored.tag !== false,
+      };
     }
   } catch (_error) {
-    /* keep both sections open when storage is unavailable */
+    /* settings.json keeps the defaults when the old values cannot be read */
   }
-  return open;
+  return seed;
+}
+
+function clearLocalView() {
+  try {
+    localStorage.removeItem(ZOOM_KEY);
+    localStorage.removeItem(SORT_KEY);
+    localStorage.removeItem(SIDEBAR_KEY);
+  } catch (_error) {
+    /* the settings file is already the copy that will be read next time */
+  }
+}
+
+function applyView(settings) {
+  if (!viewEdits.zoom) zoomLevel = clampZoom(settings.zoom);
+  if (!viewEdits.sort) bookSort = canonicalSort(settings.bookSort);
+  if (!viewEdits.sidebar) {
+    const sidebar = settings.sidebar || {};
+    sidebarOpen.category = sidebar.category !== false;
+    sidebarOpen.tag = sidebar.tag !== false;
+  }
+  applyZoom();
+  applySidebarSection("category");
+  applySidebarSection("tag");
+  const bookSortControl = document.querySelector("#book-sort");
+  if (bookSortControl) bookSortControl.value = bookSort;
+}
+
+async function loadViewSettings() {
+  let settings;
+  try {
+    settings = await invoke("prepare_settings", { seed: localViewSeed() });
+  } catch (_error) {
+    return;
+  }
+  applyView(settings);
+  viewReady = true;
+  if (viewEdits.zoom || viewEdits.sort || viewEdits.sidebar) await persistView();
+  clearLocalView();
+}
+
+async function persistView() {
+  if (!viewReady) return;
+  try {
+    await invoke("save_view_settings", {
+      settings: {
+        zoom: zoomLevel,
+        bookSort,
+        sidebar: {
+          category: sidebarOpen.category,
+          tag: sidebarOpen.tag,
+        },
+      },
+    });
+  } catch (_error) {
+    /* the choice still applies for this visit */
+  }
 }
 
 function sidebarNav(kind) {
@@ -189,21 +240,15 @@ function applySidebarSection(kind) {
 
 function setSidebarOpen(kind, open) {
   sidebarOpen[kind] = open;
-  try {
-    localStorage.setItem(SIDEBAR_KEY, JSON.stringify(sidebarOpen));
-  } catch (_error) {
-    /* the fold still applies for this visit */
-  }
+  viewEdits.sidebar = true;
+  persistView();
   applySidebarSection(kind);
 }
 
 function setBookSort(next) {
   bookSort = BOOK_SORTS.has(next) ? next : "title";
-  try {
-    localStorage.setItem(SORT_KEY, bookSort);
-  } catch (_error) {
-    /* the chosen order still applies for this visit */
-  }
+  viewEdits.sort = true;
+  persistView();
   if (viewState.kind !== "authors") renderBooks();
 }
 
@@ -269,11 +314,8 @@ function applyZoom() {
 
 function setZoom(next) {
   zoomLevel = Math.max(0, Math.min(ZOOM_WIDTHS.length - 1, next));
-  try {
-    localStorage.setItem(ZOOM_KEY, String(zoomLevel));
-  } catch (_error) {
-    /* the chosen size still applies for this visit */
-  }
+  viewEdits.zoom = true;
+  persistView();
   applyZoom();
 }
 
@@ -1320,11 +1362,13 @@ async function sortCatalogItems(mode) {
 async function openSettings() {
   const database = document.querySelector("#settings-database");
   const covers = document.querySelector("#settings-covers");
+  const settingsFile = document.querySelector("#settings-file");
   const reader = document.querySelector("#settings-reader");
   const fileManager = document.querySelector("#settings-file-manager");
   const status = document.querySelector("#settings-status");
   database.value = "";
   covers.value = "";
+  settingsFile.value = "";
   reader.value = "";
   fileManager.value = "";
   status.textContent = "";
@@ -1333,6 +1377,7 @@ async function openSettings() {
     const settings = await invoke("app_settings");
     database.value = settings.databasePath;
     covers.value = settings.coversPath;
+    settingsFile.value = settings.settingsPath;
     reader.value = settings.reader;
     fileManager.value = settings.fileManager;
   } catch (error) {
@@ -1497,5 +1542,5 @@ if (!window.__TAURI__?.core?.invoke) {
   content.querySelector("h2").textContent = "Open Books from its desktop window";
   content.querySelector("p").textContent = "The shelf talks to the local catalog from there.";
 } else {
-  reload();
+  loadViewSettings().then(() => reload());
 }
