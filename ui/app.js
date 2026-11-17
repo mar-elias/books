@@ -1401,10 +1401,27 @@ async function saveSettings() {
   }
 }
 
+function bindSidebarScrollbar() {
+  const aside = document.querySelector("aside");
+  const scroller = aside.querySelector(".sidebar-scroll");
+  let refreshing = false;
+  new ResizeObserver(() => {
+    if (refreshing) return;
+    refreshing = true;
+    const top = scroller.scrollTop;
+    scroller.style.overflowY = "hidden";
+    void scroller.offsetHeight;
+    scroller.style.overflowY = "";
+    scroller.scrollTop = top;
+    refreshing = false;
+  }).observe(aside);
+}
+
 function bind() {
   applyZoom();
   applySidebarSection("category");
   applySidebarSection("tag");
+  bindSidebarScrollbar();
   document.querySelector("#toggle-categories").addEventListener("click", () => {
     setSidebarOpen("category", !sidebarOpen.category);
   });

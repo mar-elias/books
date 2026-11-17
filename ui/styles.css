@@ -90,6 +90,8 @@ button.danger {
 aside {
   width: 240px;
   flex: none;
+  height: 100%;
+  min-height: 0;
   display: flex;
   flex-direction: column;
   background: var(--sidebar);
@@ -99,7 +101,9 @@ aside {
 }
 
 .sidebar-scroll {
-  flex: 1;
+  /* 0px, not the 0% from `flex: 1`: a percentage basis stays indefinite here,
+     so WebKit drops the scrollbar when only the window height changes. */
+  flex: 1 1 0px;
   min-height: 0;
   overflow: auto;
   overscroll-behavior: contain;
